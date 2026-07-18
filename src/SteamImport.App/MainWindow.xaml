@@ -1,0 +1,134 @@
+<Window x:Class="SteamImport.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Steam Import"
+        Width="820"
+        Height="690"
+        MinWidth="720"
+        MinHeight="620"
+        WindowStartupLocation="CenterScreen">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="28">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" Margin="0,0,0,20">
+                <TextBlock FontSize="28" FontWeight="SemiBold" Text="Importar jogo para a Steam" />
+                <TextBlock Margin="0,6,0,0"
+                           Foreground="#666666"
+                           Text="Selecione, revise e confirme. Nenhuma alteração é feita antes da confirmação." />
+            </StackPanel>
+
+            <GroupBox Grid.Row="1" Header="1. Instalação e conta Steam" Margin="0,0,0,14" Padding="14">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="Pasta da Steam" />
+                    <TextBox x:Name="SteamPathTextBox" Grid.Row="0" Grid.Column="1" Margin="0,0,8,8" />
+                    <StackPanel Grid.Row="0" Grid.Column="2" Orientation="Horizontal">
+                        <Button Margin="0,0,8,8" Click="LoadSteamClick" Content="Carregar" />
+                        <Button Margin="0,0,0,8" Click="BrowseSteamClick" Content="Procurar…" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Text="Conta local" />
+                    <ComboBox x:Name="AccountComboBox"
+                              Grid.Row="1"
+                              Grid.Column="1"
+                              Grid.ColumnSpan="2"
+                              DisplayMemberPath="Id"
+                              SelectionChanged="ReviewFieldChanged" />
+
+                    <TextBlock x:Name="SteamStatusTextBlock"
+                               Grid.Row="2"
+                               Grid.Column="1"
+                               Grid.ColumnSpan="2"
+                               Margin="0,8,0,0"
+                               Foreground="#555555"
+                               TextWrapping="Wrap" />
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Grid.Row="2" Header="2. Pasta do jogo" Margin="0,0,0,14" Padding="14">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Pasta do jogo" />
+                    <TextBox x:Name="GameFolderTextBox" Grid.Column="1" Margin="0,0,8,0" IsReadOnly="True" />
+                    <Button Grid.Column="2" Click="BrowseGameClick" Content="Selecionar…" />
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Grid.Row="3" Header="3. Revisão obrigatória" Padding="14">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="Nome na Steam" />
+                    <TextBox x:Name="DisplayNameTextBox"
+                             Grid.Row="0"
+                             Grid.Column="1"
+                             Margin="0,0,0,8"
+                             TextChanged="ReviewFieldChanged" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Text="Executável" />
+                    <ComboBox x:Name="ExecutableComboBox"
+                              Grid.Row="1"
+                              Grid.Column="1"
+                              Margin="0,0,0,8"
+                              SelectionChanged="ReviewFieldChanged" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" VerticalAlignment="Center" Text="AppID" />
+                    <TextBlock x:Name="AppIdTextBlock"
+                               Grid.Row="2"
+                               Grid.Column="1"
+                               FontFamily="Consolas"
+                               VerticalAlignment="Center" />
+                </Grid>
+            </GroupBox>
+
+            <Grid Grid.Row="4" Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="OperationStatusTextBlock"
+                           Grid.Column="0"
+                           Margin="0,0,16,0"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap" />
+                <Button Grid.Column="1" Margin="0,0,8,0" Click="CancelClick" Content="Cancelar" />
+                <Button x:Name="ImportButton"
+                        Grid.Column="2"
+                        Click="ImportClick"
+                        Content="Importar"
+                        FontWeight="SemiBold"
+                        IsEnabled="False" />
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</Window>

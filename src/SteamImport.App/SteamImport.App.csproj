@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <AssemblyName>SteamImport</AssemblyName>
+    <RootNamespace>SteamImport.App</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../SteamImport.Core/SteamImport.Core.csproj" />
+    <ProjectReference Include="../SteamImport.Infrastructure/SteamImport.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

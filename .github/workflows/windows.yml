@@ -1,0 +1,63 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-publish:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore SteamImport.sln
+
+      - name: Build
+        run: dotnet build SteamImport.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test SteamImport.sln --configuration Release --no-build
+
+      - name: Publish portable Windows application
+        run: >-
+          dotnet publish src/SteamImport.App/SteamImport.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --output artifacts/publish
+          -p:PublishSingleFile=true
+          -p:DebugType=None
+          -p:DebugSymbols=false
+
+      - name: Verify true single-file package
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem artifacts/publish -File)
+          if ($files.Count -ne 1 -or $files[0].Name -ne 'SteamImport.exe') {
+            throw "Expected only SteamImport.exe, found: $($files.Name -join ', ')"
+          }
+
+      - name: Create ZIP
+        shell: pwsh
+        run: Compress-Archive -Path artifacts/publish/* -DestinationPath artifacts/SteamImport-win-x64.zip
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: SteamImport-win-x64
+          path: artifacts/SteamImport-win-x64.zip
+          if-no-files-found: error

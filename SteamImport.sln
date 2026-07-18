@@ -1,0 +1,42 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SteamImport.Core", "src\SteamImport.Core\SteamImport.Core.csproj", "{82517E50-91D9-42BB-B350-BA5C6D6A16A1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SteamImport.Core.Tests", "tests\SteamImport.Core.Tests\SteamImport.Core.Tests.csproj", "{E954378B-26BE-47B0-A10B-463EE697D52A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SteamImport.Infrastructure", "src\SteamImport.Infrastructure\SteamImport.Infrastructure.csproj", "{9A95CD17-969C-42D0-830E-20EC72E3690F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SteamImport.Infrastructure.Tests", "tests\SteamImport.Infrastructure.Tests\SteamImport.Infrastructure.Tests.csproj", "{8BDC67B0-417D-493F-8668-5EDB6C7C069B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SteamImport.App", "src\SteamImport.App\SteamImport.App.csproj", "{6A243457-0B56-47E1-A74A-4E0A7133D4A8}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{82517E50-91D9-42BB-B350-BA5C6D6A16A1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{82517E50-91D9-42BB-B350-BA5C6D6A16A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{82517E50-91D9-42BB-B350-BA5C6D6A16A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{82517E50-91D9-42BB-B350-BA5C6D6A16A1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E954378B-26BE-47B0-A10B-463EE697D52A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E954378B-26BE-47B0-A10B-463EE697D52A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E954378B-26BE-47B0-A10B-463EE697D52A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E954378B-26BE-47B0-A10B-463EE697D52A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9A95CD17-969C-42D0-830E-20EC72E3690F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9A95CD17-969C-42D0-830E-20EC72E3690F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9A95CD17-969C-42D0-830E-20EC72E3690F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9A95CD17-969C-42D0-830E-20EC72E3690F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8BDC67B0-417D-493F-8668-5EDB6C7C069B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8BDC67B0-417D-493F-8668-5EDB6C7C069B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8BDC67B0-417D-493F-8668-5EDB6C7C069B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8BDC67B0-417D-493F-8668-5EDB6C7C069B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6A243457-0B56-47E1-A74A-4E0A7133D4A8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6A243457-0B56-47E1-A74A-4E0A7133D4A8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6A243457-0B56-47E1-A74A-4E0A7133D4A8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6A243457-0B56-47E1-A74A-4E0A7133D4A8}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

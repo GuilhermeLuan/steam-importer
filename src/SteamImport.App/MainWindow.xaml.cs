@@ -1,0 +1,254 @@
+using System.IO;
+using System.Diagnostics.CodeAnalysis;
+using System.Windows;
+using Microsoft.Win32;
+using SteamImport.Core;
+using SteamImport.Infrastructure;
+
+namespace SteamImport.App;
+
+public partial class MainWindow : Window
+{
+    private SteamInstallation? installation;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        Loaded += MainWindowLoaded;
+    }
+
+    private void MainWindowLoaded(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var detected = WindowsSteamInstallationLocator.Find();
+            if (detected is null)
+            {
+                App.Log.LogWarning("steam.detection-completed", "result=not-found");
+                SteamStatusTextBlock.Text = "Steam não encontrada. Selecione manualmente a pasta da instalação.";
+                return;
+            }
+
+            App.Log.LogInformation("steam.detection-completed", $"result=found accounts={detected.Accounts.Count}");
+            ApplyInstallation(detected);
+        }
+        catch (Exception exception)
+        {
+            HandleUnexpectedFailure("steam.detection-failed", exception);
+        }
+    }
+
+    private void LoadSteamClick(object sender, RoutedEventArgs e)
+    {
+        TryLoadInstallation(SteamPathTextBox.Text);
+    }
+
+    private void BrowseSteamClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Selecione a pasta da instalação da Steam",
+            Multiselect = false,
+        };
+        if (dialog.ShowDialog(this) == true)
+        {
+            TryLoadInstallation(dialog.FolderName);
+        }
+    }
+
+    private void BrowseGameClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Selecione a pasta do jogo",
+            Multiselect = false,
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            var review = ManualImportPlanner.CreateReview(dialog.FolderName);
+            App.Log.LogInformation(
+                "game.review-created",
+                $"candidates={review.ExecutableCandidates.Count}");
+            GameFolderTextBox.Text = dialog.FolderName;
+            DisplayNameTextBox.Text = review.DisplayName;
+            ExecutableComboBox.ItemsSource = review.ExecutableCandidates;
+            ExecutableComboBox.SelectedItem = review.RecommendedExecutable;
+            OperationStatusTextBlock.Text = "Revise o nome e o executável antes de importar.";
+            UpdateReviewState();
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            App.Log.LogError("game.review-failed", "result=rejected", exception);
+            MessageBox.Show(this, exception.Message, "Não foi possível analisar a pasta", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch (Exception exception)
+        {
+            HandleUnexpectedFailure("game.review-failed", exception);
+        }
+    }
+
+    [SuppressMessage(
+        "Design",
+        "CA1031:Do not catch general exception types",
+        Justification = "This UI boundary logs unexpected failures and reports them instead of terminating silently.")]
+    private void ImportClick(object sender, RoutedEventArgs e)
+    {
+        if (AccountComboBox.SelectedItem is not SteamAccount account ||
+            ExecutableComboBox.SelectedItem is not string executablePath)
+        {
+            return;
+        }
+
+        var request = new ManualGameImportRequest(
+            account.ShortcutsPath,
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SteamImport",
+                "Backups",
+                account.Id),
+            DisplayNameTextBox.Text,
+            executablePath);
+
+        try
+        {
+            var existingShortcutCount = SteamShortcutStore.ReadAll(account.ShortcutsPath).Count;
+            var appId = SteamShortcutAppId.Calculate(executablePath, DisplayNameTextBox.Text.Trim());
+            App.Log.LogInformation(
+                "import.confirmation-requested",
+                $"account={account.Id} existingShortcuts={existingShortcutCount} appId={appId}");
+            var confirmation = MessageBox.Show(
+                this,
+                $"Conta: {account.Id}\n" +
+                $"Atalhos não Steam existentes: {existingShortcutCount}\n\n" +
+                $"Adicionar '{DisplayNameTextBox.Text.Trim()}' preservando esses atalhos?",
+                "Confirmar alteração do shortcuts.vdf",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+            if (confirmation != MessageBoxResult.Yes)
+            {
+                App.Log.LogInformation("import.cancelled", $"account={account.Id} reason=user-declined");
+                OperationStatusTextBlock.Text = "Importação cancelada; nenhuma alteração foi feita.";
+                return;
+            }
+
+            ImportButton.IsEnabled = false;
+            var shortcut = new ManualGameImporter(new WindowsSteamProcessProbe(), App.Log).Import(request);
+            OperationStatusTextBlock.Text = $"{shortcut.DisplayName} foi adicionado. Abra a Steam para conferir o atalho.";
+            MessageBox.Show(this, "Jogo importado com sucesso.", "Steam Import", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (SteamIsRunningException exception)
+        {
+            App.Log.LogWarning("import.rejected-by-ui", "reason=steam-running");
+            OperationStatusTextBlock.Text = exception.Message;
+            MessageBox.Show(this, exception.Message, "Feche a Steam", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            App.Log.LogError("import.failed-at-ui", "result=reported", exception);
+            OperationStatusTextBlock.Text = "A importação falhou; o arquivo original foi preservado ou restaurado.";
+            MessageBox.Show(this, exception.Message, "Falha na importação", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        catch (Exception exception)
+        {
+            HandleUnexpectedFailure("import.failed-at-ui", exception);
+        }
+        finally
+        {
+            UpdateReviewState();
+        }
+    }
+
+    private void CancelClick(object sender, RoutedEventArgs e)
+    {
+        App.Log.LogInformation("game.review-cancelled", "result=cleared");
+        GameFolderTextBox.Clear();
+        DisplayNameTextBox.Clear();
+        ExecutableComboBox.ItemsSource = null;
+        AppIdTextBlock.Text = string.Empty;
+        OperationStatusTextBlock.Text = "Revisão cancelada; nenhuma alteração foi feita.";
+        UpdateReviewState();
+    }
+
+    private void ReviewFieldChanged(object sender, RoutedEventArgs e)
+    {
+        UpdateReviewState();
+    }
+
+    private void TryLoadInstallation(string path)
+    {
+        try
+        {
+            var opened = SteamInstallation.Open(path);
+            App.Log.LogInformation("steam.manual-load-completed", $"result=success accounts={opened.Accounts.Count}");
+            ApplyInstallation(opened);
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or UnauthorizedAccessException or ArgumentException)
+        {
+            App.Log.LogError("steam.manual-load-failed", "result=rejected", exception);
+            installation = null;
+            AccountComboBox.ItemsSource = null;
+            SteamStatusTextBlock.Text = exception.Message;
+            UpdateReviewState();
+        }
+        catch (Exception exception)
+        {
+            HandleUnexpectedFailure("steam.manual-load-failed", exception);
+        }
+    }
+
+    private void ApplyInstallation(SteamInstallation value)
+    {
+        installation = value;
+        SteamPathTextBox.Text = value.RootPath;
+        AccountComboBox.ItemsSource = value.Accounts;
+        AccountComboBox.SelectedIndex = value.Accounts.Count == 1 ? 0 : -1;
+        SteamStatusTextBlock.Text = value.Accounts.Count switch
+        {
+            0 => "Nenhuma conta local encontrada. Entre na Steam ao menos uma vez.",
+            1 => "Instalação e conta local detectadas.",
+            _ => "Mais de uma conta local encontrada. Selecione a conta que receberá o atalho.",
+        };
+        UpdateReviewState();
+    }
+
+    private void UpdateReviewState()
+    {
+        if (ExecutableComboBox.SelectedItem is string executablePath &&
+            !string.IsNullOrWhiteSpace(DisplayNameTextBox.Text))
+        {
+            var appId = SteamShortcutAppId.Calculate(executablePath, DisplayNameTextBox.Text.Trim());
+            AppIdTextBlock.Text = $"0x{appId:X8} ({appId})";
+        }
+        else
+        {
+            AppIdTextBlock.Text = string.Empty;
+        }
+
+        ImportButton.IsEnabled = installation is not null &&
+                                 AccountComboBox.SelectedItem is SteamAccount &&
+                                 ExecutableComboBox.SelectedItem is string &&
+                                 !string.IsNullOrWhiteSpace(DisplayNameTextBox.Text);
+    }
+
+    [SuppressMessage(
+        "Design",
+        "CA1031:Do not catch general exception types",
+        Justification = "This method is called only from UI exception boundaries.")]
+    private void HandleUnexpectedFailure(string eventName, Exception exception)
+    {
+        App.Log.LogError(eventName, "result=reported", exception);
+        OperationStatusTextBlock.Text = "Ocorreu um erro inesperado. Os detalhes foram registrados no log.";
+        MessageBox.Show(
+            this,
+            App.BuildUnexpectedErrorMessage(),
+            "Erro inesperado",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+    }
+}
