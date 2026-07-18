@@ -1,0 +1,40 @@
+# .NET build output
+bin/
+obj/
+artifacts/
+
+# IDEs and editors
+.idea/
+*.sln.iml
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Test and coverage output
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# Packages and publish output
+*.nupkg
+*.snupkg
+publish/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local secrets and configuration
+appsettings.Local.json
+*.secrets.json
+.env
+.env.*
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
