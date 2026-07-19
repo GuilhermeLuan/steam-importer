@@ -75,6 +75,15 @@ internal static class StatusPage
                   <div id="executable-list" class="executable-list"></div>
                 </fieldset>
                 <p id="recommendation" class="recommendation"></p>
+                <section class="identification" aria-labelledby="identification-title">
+                  <h3 id="identification-title">Identificação SteamGridDB</h3>
+                  <p id="identification-message" class="panel-message" aria-live="polite"></p>
+                  <div id="match-list" class="match-list"></div>
+                </section>
+                <section id="artwork-preview" class="artwork-preview" aria-labelledby="artwork-title" hidden>
+                  <h3 id="artwork-title">Artes recomendadas</h3>
+                  <div id="artwork-list" class="artwork-list"></div>
+                </section>
                 <div class="review-actions">
                   <button id="cancel-review" type="button">[ CANCELAR ]</button>
                 </div>
@@ -182,6 +191,18 @@ internal static class StatusPage
         .executable-option:has(input:checked) { border-color: var(--green); color: var(--green); }
         .executable-option input { width: auto; accent-color: var(--green); }
         .recommendation { color: var(--green); font-size: .72rem; }
+        .identification, .artwork-preview { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 4px; }
+        .identification h3, .artwork-preview h3 { margin: 18px 0 10px; }
+        .identification .panel-message { padding: 8px 0 14px; }
+        .match-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        .match-option { display: grid; grid-template-columns: 56px 1fr; align-items: center; gap: 12px; width: 100%; margin: 0; padding: 10px; border: 1px solid var(--line); text-align: left; }
+        .match-option.no-cover { grid-template-columns: 1fr; }
+        .match-option img { width: 56px; aspect-ratio: 2 / 3; object-fit: cover; background: #050806; }
+        .artwork-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        .artwork-item { min-height: 90px; margin: 0; padding: 10px; border: 1px solid var(--line); color: var(--muted); }
+        .artwork-item img { display: block; width: 100%; max-height: 180px; object-fit: contain; background: #050806; }
+        .artwork-item figcaption { margin-top: 8px; font-size: .68rem; letter-spacing: .06em; }
+        .artwork-missing { display: grid; place-items: center; text-align: center; font-size: .68rem; }
         .review-actions { display: flex; justify-content: flex-end; border-top: 1px solid var(--line); margin-top: 22px; padding-top: 14px; }
         .review-actions button { margin: 0; }
         footer { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 24px; color: var(--muted); font-size: .67rem; }
@@ -193,6 +214,7 @@ internal static class StatusPage
           .link-state { grid-column: 1 / -1; justify-self: start; }
           .status-grid { grid-template-columns: 1fr; }
           .game-list { grid-template-columns: 1fr; }
+          .match-list, .artwork-list { grid-template-columns: 1fr; }
           .candidate { border-right: 0; }
           article { min-height: 120px; border-right: 0; border-bottom: 1px solid var(--line); }
           article:last-child { border-bottom: 0; }
@@ -219,6 +241,10 @@ internal static class StatusPage
         const reviewName = document.querySelector('#review-name');
         const executableList = document.querySelector('#executable-list');
         const recommendation = document.querySelector('#recommendation');
+        const identificationMessage = document.querySelector('#identification-message');
+        const matchList = document.querySelector('#match-list');
+        const artworkPreview = document.querySelector('#artwork-preview');
+        const artworkList = document.querySelector('#artwork-list');
 
         function render(status) {
           cards.forEach((card) => {
@@ -254,6 +280,11 @@ internal static class StatusPage
           document.querySelector('#review-form').reset();
           executableList.replaceChildren();
           recommendation.textContent = '';
+          identificationMessage.textContent = '';
+          identificationMessage.classList.remove('error');
+          matchList.replaceChildren();
+          artworkPreview.hidden = true;
+          artworkList.replaceChildren();
         }
 
         function cancelReview() {
@@ -296,12 +327,93 @@ internal static class StatusPage
               ? `RECOMENDADO // ${recommended.relativePath}`
               : '';
             reviewPanel.hidden = false;
-            gamesMessage.textContent = 'REVISE O NOME E O EXECUTÁVEL OU CANCELE.';
+            gamesMessage.textContent = 'REVISE O EXECUTÁVEL E ESCOLHA O TÍTULO CORRETO.';
             reviewName.focus();
+            await loadMatches(candidateId);
           } catch (error) {
             closeReview();
             gamesMessage.classList.add('error');
             gamesMessage.textContent = error.message;
+          }
+        }
+
+        async function loadMatches(candidateId) {
+          identificationMessage.classList.remove('error');
+          identificationMessage.textContent = 'PESQUISANDO TÍTULOS...';
+          matchList.replaceChildren();
+          artworkPreview.hidden = true;
+          artworkList.replaceChildren();
+          try {
+            const response = await fetch(`${gamesEndpoint}/${candidateId}/matches`, { cache: 'no-store' });
+            if (!response.ok) throw new Error(await readProblem(response));
+            const matches = await response.json();
+            matchList.replaceChildren(...matches.map((match) => {
+              const button = document.createElement('button');
+              button.type = 'button';
+              button.className = `match-option${match.coverUrl ? '' : ' no-cover'}`;
+              if (match.coverUrl) {
+                const cover = document.createElement('img');
+                cover.src = match.coverUrl;
+                cover.alt = '';
+                button.append(cover);
+              }
+              const name = document.createElement('span');
+              name.textContent = match.officialName;
+              button.append(name);
+              button.addEventListener('click', () => loadArtwork(candidateId, match.gameId));
+              return button;
+            }));
+            identificationMessage.textContent = matches.length === 0
+              ? 'NENHUM TÍTULO ENCONTRADO // REVISE O NOME E TENTE NOVAMENTE.'
+              : 'ESCOLHA EXPLICITAMENTE A EDIÇÃO CORRETA.';
+          } catch (error) {
+            identificationMessage.classList.add('error');
+            identificationMessage.textContent = error.message;
+          }
+        }
+
+        async function loadArtwork(candidateId, gameId) {
+          identificationMessage.classList.remove('error');
+          identificationMessage.textContent = 'CARREGANDO ARTES ESTÁTICAS...';
+          artworkPreview.hidden = true;
+          artworkList.replaceChildren();
+          try {
+            const response = await fetch(
+              `${gamesEndpoint}/${candidateId}/matches/${gameId}/artwork`,
+              { cache: 'no-store' });
+            if (!response.ok) throw new Error(await readProblem(response));
+            const artwork = await response.json();
+            reviewName.value = artwork.officialName;
+            const categories = [
+              ['Grid vertical', artwork.verticalGrid],
+              ['Grid horizontal', artwork.horizontalGrid],
+              ['Hero', artwork.hero],
+              ['Logo', artwork.logo],
+              ['Ícone', artwork.icon],
+            ];
+            artworkList.replaceChildren(...categories.map(([label, asset]) => {
+              if (!asset) {
+                const missing = document.createElement('p');
+                missing.className = 'artwork-item artwork-missing';
+                missing.textContent = `${label.toLocaleUpperCase('pt-BR')} // AUSENTE`;
+                return missing;
+              }
+
+              const figure = document.createElement('figure');
+              figure.className = 'artwork-item';
+              const image = document.createElement('img');
+              image.src = asset.previewUrl;
+              image.alt = `${label} de ${artwork.officialName}`;
+              const caption = document.createElement('figcaption');
+              caption.textContent = `${label.toLocaleUpperCase('pt-BR')} // SCORE ${asset.score}`;
+              figure.append(image, caption);
+              return figure;
+            }));
+            artworkPreview.hidden = false;
+            identificationMessage.textContent = 'TÍTULO CONFIRMADO // PRÉVIA SEM ALTERAR A STEAM.';
+          } catch (error) {
+            identificationMessage.classList.add('error');
+            identificationMessage.textContent = error.message;
           }
         }
 

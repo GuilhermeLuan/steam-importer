@@ -65,33 +65,55 @@ public static class SteamImportServer
     public const int Port = 5050;
 
     public static WebApplication Build(IStatusSource statusSource) =>
-        Build(statusSource, new MissingGamesRootSource(), new SystemGameFolderScanner());
+        Build(
+            statusSource,
+            new MissingGamesRootSource(),
+            new SystemGameFolderScanner(),
+            new MissingSteamGridDbClient());
 
     public static WebApplication Build(
         IStatusSource statusSource,
         IGamesRootSource gamesRootSource) =>
-        Build(statusSource, gamesRootSource, new SystemGameFolderScanner());
+        Build(
+            statusSource,
+            gamesRootSource,
+            new SystemGameFolderScanner(),
+            new MissingSteamGridDbClient());
 
     public static WebApplication Build(
         IStatusSource statusSource,
         IGamesRootSource gamesRootSource,
-        IGameFolderScanner gameFolderScanner)
+        IGameFolderScanner gameFolderScanner) =>
+        Build(
+            statusSource,
+            gamesRootSource,
+            gameFolderScanner,
+            new MissingSteamGridDbClient());
+
+    public static WebApplication Build(
+        IStatusSource statusSource,
+        IGamesRootSource gamesRootSource,
+        IGameFolderScanner gameFolderScanner,
+        ISteamGridDbClient steamGridDbClient)
     {
         ArgumentNullException.ThrowIfNull(statusSource);
         ArgumentNullException.ThrowIfNull(gamesRootSource);
         ArgumentNullException.ThrowIfNull(gameFolderScanner);
+        ArgumentNullException.ThrowIfNull(steamGridDbClient);
         var builder = WebApplication.CreateSlimBuilder();
         builder.Services.AddSingleton(statusSource);
         builder.Services.AddSingleton(gamesRootSource);
         builder.Services.AddSingleton(gameFolderScanner);
+        builder.Services.AddSingleton(steamGridDbClient);
         builder.Services.AddSingleton<GameCandidateCatalog>();
+        builder.Services.AddSingleton<GameIdentificationCatalog>();
 
         var application = builder.Build();
         application.Use(async (context, next) =>
         {
             context.Response.Headers.XContentTypeOptions = "nosniff";
             context.Response.Headers.ContentSecurityPolicy =
-                "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+                "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' https:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
             await next(context);
         });
         application.MapGet("/", () => Results.Content(StatusPage.Html, "text/html; charset=utf-8"));
@@ -112,6 +134,47 @@ public static class SteamImportServer
             context.Response.Headers.CacheControl = "no-store";
             return ReadCandidateList(catalog.Refresh);
         });
+        application.MapGet(
+            "/api/games/{candidateId:guid}/matches",
+            async (Guid candidateId, HttpContext context, GameIdentificationCatalog catalog, CancellationToken cancellationToken) =>
+            {
+                context.Response.Headers.CacheControl = "no-store";
+                try
+                {
+                    var matches = await catalog.SearchAsync(candidateId, cancellationToken);
+                    return matches is null
+                        ? Results.NotFound()
+                        : Results.Ok(matches);
+                }
+                catch (SteamGridDbException exception)
+                {
+                    return SteamGridDbProblem(exception);
+                }
+            });
+        application.MapGet(
+            "/api/games/{candidateId:guid}/matches/{gameId:long}/artwork",
+            async (Guid candidateId, long gameId, HttpContext context, GameIdentificationCatalog catalog, CancellationToken cancellationToken) =>
+            {
+                context.Response.Headers.CacheControl = "no-store";
+                try
+                {
+                    var artwork = await catalog.SelectAsync(candidateId, gameId, cancellationToken);
+                    return artwork is null
+                        ? Results.NotFound()
+                        : Results.Ok(artwork);
+                }
+                catch (SteamGridDbMatchNotSearchedException)
+                {
+                    return Results.Problem(
+                        title: "Escolha inválida.",
+                        detail: "Pesquise os títulos e escolha uma das opções exibidas antes de carregar as artes.",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                catch (SteamGridDbException exception)
+                {
+                    return SteamGridDbProblem(exception);
+                }
+            });
         application.MapGet("/api/games/{candidateId:guid}", (Guid candidateId, HttpContext context, GameCandidateCatalog catalog) =>
         {
             context.Response.Headers.CacheControl = "no-store";
@@ -169,8 +232,31 @@ public static class SteamImportServer
         }
     }
 
+    private static IResult SteamGridDbProblem(SteamGridDbException exception) =>
+        Results.Problem(
+            title: "Não foi possível consultar o SteamGridDB.",
+            detail: exception.Message,
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+
     private sealed class MissingGamesRootSource : IGamesRootSource
     {
         public string? GetGamesRootPath() => null;
+    }
+
+    private sealed class MissingSteamGridDbClient : ISteamGridDbClient
+    {
+        public Task<IReadOnlyList<SteamGridDbGameMatch>> SearchGamesAsync(
+            string provisionalName,
+            CancellationToken cancellationToken) =>
+            Task.FromException<IReadOnlyList<SteamGridDbGameMatch>>(MissingConfiguration());
+
+        public Task<SteamGridDbGameArtwork> GetRecommendedArtworkAsync(
+            long gameId,
+            CancellationToken cancellationToken) =>
+            Task.FromException<SteamGridDbGameArtwork>(MissingConfiguration());
+
+        private static SteamGridDbException MissingConfiguration() => new(
+            SteamGridDbFailure.MissingConfiguration,
+            "Configure a chave do SteamGridDB no PC-console e tente novamente.");
     }
 }

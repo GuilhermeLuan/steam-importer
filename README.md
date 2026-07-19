@@ -13,8 +13,10 @@ com revisão obrigatória e preservação dos atalhos existentes.
    endereços `http://<IP-DO-PC>:5050` mostrados na janela.
 4. Consulte na página remota se configuração, Steam e conta estão prontas.
 5. Na página remota, atualize a descoberta, selecione uma subpasta e revise o
-   nome provisório e o executável recomendado. Cancelar a revisão não altera a
-   Steam.
+   executável recomendado. Escolha explicitamente o título correto entre os
+   resultados do SteamGridDB; o nome oficial e a melhor arte estática de cada
+   categoria disponível aparecem em uma prévia. Cancelar a revisão não altera
+   a Steam.
 6. Para a importação local existente, selecione a pasta do jogo, revise nome e
    executável, feche completamente a Steam e confirme a operação.
 
@@ -54,6 +56,7 @@ O workflow `Windows build` executa build e testes e publica um ZIP contendo um
 
 ## Escopo atual
 
-Este primeiro corte remoto ainda não inclui SteamGridDB, artes, importação pelo
-navegador, monitoramento automático de pastas, bandeja do sistema, remoção de
-jogos nem encerramento automático da Steam.
+O fluxo remoto atual identifica o jogo e pré-visualiza artes do SteamGridDB,
+mas ainda não importa pelo navegador. Monitoramento automático de pastas,
+bandeja do sistema, remoção de jogos e encerramento automático da Steam também
+continuam fora do escopo atual.
