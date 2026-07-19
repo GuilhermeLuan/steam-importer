@@ -6,14 +6,15 @@ using Microsoft.Win32;
 namespace SteamImport.Infrastructure;
 
 [SupportedOSPlatform("windows")]
-public static class WindowsStartupRegistration
+public sealed class WindowsStartupRegistration : IUserStartupRegistration
 {
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
-    public static void EnsureRegistered(string executablePath)
+    public void EnsureRegistered(string executablePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
-        using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true);
+        using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true) ??
+                        throw new InvalidOperationException("Não foi possível abrir a inicialização automática do usuário.");
         key.SetValue("SteamImport", $"\"{executablePath}\"", RegistryValueKind.String);
     }
 }

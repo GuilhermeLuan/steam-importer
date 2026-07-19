@@ -10,9 +10,13 @@ namespace SteamImport.App;
 
 public partial class App : Application
 {
+    private static readonly string ApplicationDataDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "SteamImport");
     private static readonly IAppLog ApplicationLog = CreateLog();
     private static readonly LocalConfigurationStore LocalConfigurationStore = CreateConfigurationStore();
     private static readonly HttpClient SteamGridDbHttpClient = CreateSteamGridDbHttpClient();
+    private SingleUserApplicationInstance? applicationInstance;
     private WebApplication? webApplication;
 
     internal static IAppLog Log => ApplicationLog;
@@ -21,15 +25,43 @@ public partial class App : Application
 
     internal static LocalConfigurationStore ConfigurationStore => LocalConfigurationStore;
 
+    internal static LocalStartup LocalStartup => new(LocalConfigurationStore);
+
+    internal static void SaveConfiguration(LocalConfiguration configuration)
+    {
+        var executablePath = Environment.ProcessPath ??
+                             throw new InvalidOperationException("Não foi possível identificar o executável do Steam Import.");
+        new LocalSetup(
+            LocalConfigurationStore,
+            new WindowsStartupRegistration(),
+            executablePath).Save(configuration);
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         DispatcherUnhandledException += HandleDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += HandleUnhandledException;
         TaskScheduler.UnobservedTaskException += HandleUnobservedTaskException;
+        base.OnStartup(e);
+        applicationInstance = SingleUserApplicationInstance.TryAcquire(
+            Path.Combine(ApplicationDataDirectory, "steam-import.lock"));
+        if (applicationInstance is null)
+        {
+            Log.LogWarning("app.second-instance", "result=controlled-exit");
+            MessageBox.Show(
+                "O Steam Import já está em execução para este usuário.",
+                "Steam Import",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            Shutdown();
+            return;
+        }
+
         Log.LogInformation(
             "app.started",
             $"version={typeof(App).Assembly.GetName().Version} os={Environment.OSVersion.VersionString.Replace(' ', '-')}");
-        base.OnStartup(e);
+        MainWindow = new MainWindow();
+        MainWindow.Show();
         StartWebServer();
     }
 
@@ -42,6 +74,7 @@ public partial class App : Application
         }
 
         Log.LogInformation("app.exited", $"exitCode={e.ApplicationExitCode}");
+        applicationInstance?.Dispose();
         base.OnExit(e);
     }
 
@@ -77,10 +110,7 @@ public partial class App : Application
     {
         try
         {
-            return new FileAppLog(Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "SteamImport",
-                "Logs"));
+            return new FileAppLog(Path.Combine(ApplicationDataDirectory, "Logs"));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -90,10 +120,7 @@ public partial class App : Application
 
     private static LocalConfigurationStore CreateConfigurationStore() =>
         new(
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "SteamImport",
-                "config.json"),
+            Path.Combine(ApplicationDataDirectory, "config.json"),
             new WindowsUserSecretProtector());
 
     private static HttpClient CreateSteamGridDbHttpClient() => new()
