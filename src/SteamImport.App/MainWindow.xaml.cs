@@ -47,15 +47,25 @@ public partial class MainWindow : Window
 
     private bool TryApplySavedConfiguration()
     {
-        try
+        var startup = App.LocalStartup.Resume();
+        if (startup.Configuration is null)
         {
-            var configuration = App.ConfigurationStore.Load();
-            if (configuration is null)
+            if (startup.SavedConfigurationInvalid)
+            {
+                App.Log.LogWarning("configuration.load-failed", "result=reconfiguration-required");
+                ConfigurationStatusTextBlock.Text = "A configuração salva não é mais válida. Revise os campos abaixo.";
+            }
+            else
             {
                 ConfigurationStatusTextBlock.Text = "Configuração pendente. Preencha os campos e confirme a conta Steam.";
-                return false;
             }
 
+            return false;
+        }
+
+        try
+        {
+            var configuration = startup.Configuration;
             GamesRootTextBox.Text = configuration.GamesRootPath;
             SteamGridDbApiKeyPasswordBox.Password = configuration.SteamGridDbApiKey;
             var savedInstallation = SteamInstallation.Open(configuration.SteamRootPath);
@@ -101,15 +111,11 @@ public partial class MainWindow : Window
 
         try
         {
-            App.ConfigurationStore.Save(new LocalConfiguration(
+            App.SaveConfiguration(new LocalConfiguration(
                 GamesRootTextBox.Text,
                 SteamGridDbApiKeyPasswordBox.Password,
                 installation.RootPath,
                 account.Id));
-            if (Environment.ProcessPath is { } executablePath)
-            {
-                WindowsStartupRegistration.EnsureRegistered(executablePath);
-            }
 
             App.Log.LogInformation("configuration.saved", $"account={account.Id} result=ready");
             ConfigurationStatusTextBlock.Text = "Configuração salva e validada. A chave está protegida para este usuário do Windows.";
@@ -126,7 +132,11 @@ public partial class MainWindow : Window
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (
+            exception is IOException or
+            UnauthorizedAccessException or
+            InvalidOperationException or
+            System.Security.SecurityException)
         {
             App.Log.LogError("configuration.save-failed", "result=reported", exception);
             ConfigurationStatusTextBlock.Text = "Não foi possível salvar a configuração local.";
