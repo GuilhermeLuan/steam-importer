@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
@@ -421,6 +422,81 @@ public sealed class GameEndpointsTests
         Assert.Null(steamGridDb.SelectedGameId);
     }
 
+    [Fact]
+    public async Task ConfirmedRemoteReviewCanBeImportedUsingOnlyServerGeneratedIds()
+    {
+        using var games = TemporaryGamesRoot.Create();
+        games.AddGame("Neon Horizon");
+        games.AddFile("Neon Horizon", "NeonHorizon.exe");
+        var steamRoot = System.IO.Path.Combine(games.OutsidePath, "SteamFixture");
+        var shortcutsPath = System.IO.Path.Combine(
+            steamRoot,
+            "userdata",
+            "1",
+            "config",
+            "shortcuts.vdf");
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(shortcutsPath)!);
+        File.WriteAllBytes(System.IO.Path.Combine(steamRoot, "steam.exe"), []);
+        var steamGridDb = new FakeSteamGridDbClient
+        {
+            Matches = [new SteamGridDbGameMatch(42, "Neon Horizon", null)],
+            Artwork = new SteamGridDbGameArtwork(
+                42,
+                "Neon Horizon Official",
+                null,
+                null,
+                null,
+                null,
+                null),
+        };
+        using var artworkHttpClient = new HttpClient(new RejectingArtworkHandler());
+        using var importer = new RemoteGameImporter(
+            new ClosedSteamClient(),
+            new NoRunningGameProbe(),
+            artworkHttpClient);
+        await using var application = SteamImportServer.Build(
+            new FixedStatusSource(new SteamImportStatus(true, true, true)),
+            new FixedGamesRootSource(games.Path),
+            new SystemGameFolderScanner(),
+            steamGridDb,
+            new FixedRemoteImportContextSource(new RemoteImportContext(
+                System.IO.Path.Combine(steamRoot, "steam.exe"),
+                shortcutsPath,
+                System.IO.Path.Combine(steamRoot, "userdata", "1", "config", "grid"),
+                System.IO.Path.Combine(games.Path, "Backups"))),
+            importer);
+        application.Urls.Add("http://127.0.0.1:0");
+        await application.StartAsync(CancellationToken.None);
+        var server = application.Services.GetRequiredService<IServer>();
+        var address = Assert.Single(server.Features.Get<IServerAddressesFeature>()!.Addresses);
+        using var client = new HttpClient { BaseAddress = new Uri(address) };
+        var candidate = Assert.Single(await ReadCandidates(client, HttpMethod.Get, "/api/games"));
+        using var reviewResponse = await client.GetAsync($"/api/games/{candidate.Id}");
+        using var review = JsonDocument.Parse(await reviewResponse.Content.ReadAsStringAsync());
+        var executableId = review.RootElement
+            .GetProperty("executables")[0]
+            .GetProperty("executableId")
+            .GetGuid();
+        (await client.GetAsync($"/api/games/{candidate.Id}/matches")).EnsureSuccessStatusCode();
+        (await client.GetAsync($"/api/games/{candidate.Id}/matches/42/artwork")).EnsureSuccessStatusCode();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/import",
+            new
+            {
+                candidateId = candidate.Id,
+                executableId,
+                gameId = 42,
+                displayName = "Neon Horizon Official",
+            });
+        var json = await response.Content.ReadAsStringAsync();
+
+        response.EnsureSuccessStatusCode();
+        var shortcut = Assert.Single(SteamShortcutStore.ReadAll(shortcutsPath));
+        Assert.Equal("Neon Horizon Official", shortcut.DisplayName);
+        Assert.DoesNotContain(games.Path, json, StringComparison.Ordinal);
+    }
+
     private static SteamGridDbArtworkAsset ArtworkAsset(long id, int score, string name) =>
         new(
             id,
@@ -496,6 +572,39 @@ public sealed class GameEndpointsTests
 
         public IReadOnlyList<string> FindExecutables(string gameFolderPath) =>
             throw new UnauthorizedAccessException("Sensitive filesystem path");
+    }
+
+    private sealed class FixedRemoteImportContextSource(RemoteImportContext context)
+        : IRemoteImportContextSource
+    {
+        public RemoteImportContext? GetContext() => context;
+    }
+
+    private sealed class ClosedSteamClient : ISteamClientController
+    {
+        public bool IsRunning() => false;
+
+        public Task RequestShutdownAsync(string steamExecutablePath, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException();
+
+        public Task<bool> WaitForExitAsync(TimeSpan timeout, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException();
+
+        public Task StartBigPictureAsync(string steamExecutablePath, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException();
+    }
+
+    private sealed class NoRunningGameProbe : IGameActivityProbe
+    {
+        public bool IsGameRunning(string gamesRootPath, string steamRootPath) => false;
+    }
+
+    private sealed class RejectingArtworkHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("No absent artwork should be downloaded.");
     }
 
     private sealed class TemporaryGamesRoot : IDisposable

@@ -8,6 +8,7 @@ public sealed class GameIdentificationCatalog(
 {
     private readonly object sync = new();
     private readonly Dictionary<Guid, HashSet<long>> searchedMatches = [];
+    private readonly Dictionary<Guid, SteamGridDbGameArtwork> selectedArtwork = [];
 
     public async Task<IReadOnlyList<SteamGridDbGameMatch>?> SearchAsync(
         Guid candidateId,
@@ -25,6 +26,7 @@ public sealed class GameIdentificationCatalog(
         lock (sync)
         {
             searchedMatches[candidateId] = matches.Select(match => match.GameId).ToHashSet();
+            selectedArtwork.Remove(candidateId);
         }
 
         return matches;
@@ -48,7 +50,23 @@ public sealed class GameIdentificationCatalog(
             }
         }
 
-        return await steamGridDbClient.GetRecommendedArtworkAsync(gameId, cancellationToken);
+        var artwork = await steamGridDbClient.GetRecommendedArtworkAsync(gameId, cancellationToken);
+        lock (sync)
+        {
+            selectedArtwork[candidateId] = artwork;
+        }
+
+        return artwork;
+    }
+
+    public SteamGridDbGameArtwork? GetSelection(Guid candidateId, long gameId)
+    {
+        lock (sync)
+        {
+            return selectedArtwork.TryGetValue(candidateId, out var artwork) && artwork.GameId == gameId
+                ? artwork
+                : null;
+        }
     }
 }
 
