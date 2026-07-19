@@ -84,8 +84,44 @@ public sealed class LocalConfigurationStatusSourceTests
             Directory.Delete(gamesRoot);
 
             var status = new LocalConfigurationStatusSource(store).GetStatus();
+            var gamesRootPath = new LocalConfigurationGamesRootSource(store).GetGamesRootPath();
 
             Assert.Equal(new SteamImportStatus(false, false, false), status);
+            Assert.Null(gamesRootPath);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PersistedConfigurationProvidesTheGamesRootToTheWebCatalog()
+    {
+        var root = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(),
+            $"SteamImport-GamesRoot-{Guid.NewGuid():N}");
+        var gamesRoot = System.IO.Path.Combine(root, "Games");
+        var steamRoot = System.IO.Path.Combine(root, "Steam");
+        var accountId = "76561198000000001";
+        Directory.CreateDirectory(gamesRoot);
+        Directory.CreateDirectory(System.IO.Path.Combine(steamRoot, "userdata", accountId, "config"));
+        File.WriteAllBytes(System.IO.Path.Combine(steamRoot, "steam.exe"), []);
+        var store = new LocalConfigurationStore(
+            System.IO.Path.Combine(root, "config.json"),
+            new TestSecretProtector());
+
+        try
+        {
+            store.Save(new LocalConfiguration(
+                gamesRoot,
+                "sgdb-secret-key",
+                steamRoot,
+                accountId));
+
+            var path = new LocalConfigurationGamesRootSource(store).GetGamesRootPath();
+
+            Assert.Equal(gamesRoot, path);
         }
         finally
         {

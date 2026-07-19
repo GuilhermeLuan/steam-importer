@@ -12,7 +12,10 @@ com revisão obrigatória e preservação dos atalhos existentes.
 3. Salve a configuração e abra, em outro dispositivo da rede privada, um dos
    endereços `http://<IP-DO-PC>:5050` mostrados na janela.
 4. Consulte na página remota se configuração, Steam e conta estão prontas.
-5. Para a importação local existente, selecione a pasta do jogo, revise nome e
+5. Na página remota, atualize a descoberta, selecione uma subpasta e revise o
+   nome provisório e o executável recomendado. Cancelar a revisão não altera a
+   Steam.
+6. Para a importação local existente, selecione a pasta do jogo, revise nome e
    executável, feche completamente a Steam e confirme a operação.
 
 A configuração fica em `%LOCALAPPDATA%\SteamImport\config.json`. A chave do
@@ -51,5 +54,6 @@ O workflow `Windows build` executa build e testes e publica um ZIP contendo um
 
 ## Escopo atual
 
-Este primeiro corte não inclui SteamGridDB, artes, monitoramento automático de
-pastas, bandeja do sistema, remoção de jogos nem encerramento automático da Steam.
+Este primeiro corte remoto ainda não inclui SteamGridDB, artes, importação pelo
+navegador, monitoramento automático de pastas, bandeja do sistema, remoção de
+jogos nem encerramento automático da Steam.

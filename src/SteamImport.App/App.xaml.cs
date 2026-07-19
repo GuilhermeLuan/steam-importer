@@ -48,7 +48,8 @@ public partial class App : Application
         try
         {
             webApplication = SteamImportServer.Build(
-                new LocalConfigurationStatusSource(ConfigurationStore));
+                new LocalConfigurationStatusSource(ConfigurationStore),
+                new LocalConfigurationGamesRootSource(ConfigurationStore));
             webApplication.Urls.Add($"http://0.0.0.0:{SteamImportServer.Port}");
             webApplication.StartAsync().GetAwaiter().GetResult();
             Log.LogInformation("web.started", $"port={SteamImportServer.Port}");

@@ -29,6 +29,10 @@ jobs:
       - name: Build
         run: dotnet build SteamImport.sln --configuration Release --no-restore
 
+      - name: Install Playwright Chromium
+        shell: pwsh
+        run: tests/SteamImport.Web.Tests/bin/Release/net10.0/playwright.ps1 install chromium
+
       - name: Test
         run: dotnet test SteamImport.sln --configuration Release --no-build
 
