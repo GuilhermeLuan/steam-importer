@@ -5,13 +5,20 @@ com revisão obrigatória e preservação dos atalhos existentes.
 
 ## Primeiro fluxo disponível
 
-1. Abra o aplicativo no Windows 10 ou 11.
-2. Confirme a instalação e a conta local da Steam. Se a instalação não for
+1. Abra o aplicativo no PC-console com Windows 10 ou 11.
+2. Selecione a pasta raiz dos jogos, informe sua chave pessoal do SteamGridDB e
+   confirme a instalação e a conta local da Steam. Se a instalação não for
    detectada, selecione manualmente a pasta que contém `steam.exe`.
-3. Selecione a pasta do jogo.
-4. Revise o nome e o executável recomendado.
-5. Feche completamente a Steam e confirme a importação.
-6. Abra a Steam e confira o jogo na biblioteca.
+3. Salve a configuração e abra, em outro dispositivo da rede privada, um dos
+   endereços `http://<IP-DO-PC>:5050` mostrados na janela.
+4. Consulte na página remota se configuração, Steam e conta estão prontas.
+5. Para a importação local existente, selecione a pasta do jogo, revise nome e
+   executável, feche completamente a Steam e confirme a operação.
+
+A configuração fica em `%LOCALAPPDATA%\SteamImport\config.json`. A chave do
+SteamGridDB é protegida para o usuário atual do Windows, não é enviada ao
+navegador e não é registrada nos logs. Ao salvar, o aplicativo também registra
+sua inicialização automática para esse usuário.
 
 A importação é bloqueada enquanto `steam.exe` está em execução. Antes de alterar
 um `shortcuts.vdf` existente, o aplicativo mantém até cinco backups em
