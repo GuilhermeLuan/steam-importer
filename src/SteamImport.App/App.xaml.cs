@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Net.Http;
 using System.Windows;
@@ -5,10 +6,15 @@ using System.Windows.Threading;
 using Microsoft.AspNetCore.Builder;
 using SteamImport.Infrastructure;
 using SteamImport.Web;
+using MessageBox = System.Windows.MessageBox;
 
 namespace SteamImport.App;
 
-public partial class App : Application
+[SuppressMessage(
+    "Design",
+    "CA1001:Types that own disposable fields should be disposable",
+    Justification = "The WPF application disposes tray resources during OnExit.")]
+public partial class App : System.Windows.Application
 {
     private static readonly string ApplicationDataDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -18,6 +24,10 @@ public partial class App : Application
     private static readonly HttpClient SteamGridDbHttpClient = CreateSteamGridDbHttpClient();
     private SingleUserApplicationInstance? applicationInstance;
     private WebApplication? webApplication;
+    private System.Windows.Forms.NotifyIcon? trayIcon;
+    private System.Windows.Forms.ContextMenuStrip? trayMenu;
+    private TrayApplicationLifecycle? trayLifecycle;
+    private bool shutdownRequested;
 
     internal static IAppLog Log => ApplicationLog;
 
@@ -60,13 +70,26 @@ public partial class App : Application
         Log.LogInformation(
             "app.started",
             $"version={typeof(App).Assembly.GetName().Version} os={Environment.OSVersion.VersionString.Replace(' ', '-')}");
+        trayLifecycle = new TrayApplicationLifecycle(LocalStartup.Resume().StartMinimized);
+        if (!TryCreateTrayIcon() && trayLifecycle.WindowState == TrayWindowState.Hidden)
+        {
+            trayLifecycle = new TrayApplicationLifecycle(startHidden: false);
+        }
+
         MainWindow = new MainWindow();
+        MainWindow.ShowInTaskbar = trayLifecycle.WindowState == TrayWindowState.Visible;
         MainWindow.Show();
+        if (trayLifecycle.WindowState == TrayWindowState.Hidden)
+        {
+            MainWindow.Hide();
+        }
+
         StartWebServer();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        DisposeTrayIcon();
         if (webApplication is not null)
         {
             webApplication.StopAsync().GetAwaiter().GetResult();
@@ -76,6 +99,88 @@ public partial class App : Application
         Log.LogInformation("app.exited", $"exitCode={e.ApplicationExitCode}");
         applicationInstance?.Dispose();
         base.OnExit(e);
+    }
+
+    internal bool HandleMainWindowClosing()
+    {
+        if (shutdownRequested || trayIcon is null)
+        {
+            return false;
+        }
+
+        var action = trayLifecycle?.RequestWindowClose() ?? TrayWindowCloseAction.Exit;
+        if (action == TrayWindowCloseAction.Exit)
+        {
+            return false;
+        }
+
+        MainWindow.Hide();
+        MainWindow.ShowInTaskbar = false;
+        return true;
+    }
+
+    private bool TryCreateTrayIcon()
+    {
+        try
+        {
+            trayMenu = new System.Windows.Forms.ContextMenuStrip();
+            trayMenu.Items.Add("Abrir", null, (_, _) => OpenMainWindow());
+            trayMenu.Items.Add("Sair", null, (_, _) => ExitFromTray());
+            trayIcon = new System.Windows.Forms.NotifyIcon
+            {
+                Icon = System.Drawing.SystemIcons.Application,
+                Text = "Steam Import",
+                ContextMenuStrip = trayMenu,
+                Visible = true,
+            };
+            trayIcon.DoubleClick += (_, _) => OpenMainWindow();
+            return true;
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            Log.LogWarning("tray.create-failed", "result=window-visible");
+            DisposeTrayIcon();
+            return false;
+        }
+    }
+
+    private void OpenMainWindow()
+    {
+        if (MainWindow is null || trayLifecycle?.WindowState == TrayWindowState.Exited)
+        {
+            return;
+        }
+
+        trayLifecycle!.OpenFromTray();
+        MainWindow.ShowInTaskbar = true;
+        MainWindow.WindowState = WindowState.Normal;
+        MainWindow.Show();
+        MainWindow.Activate();
+    }
+
+    private void ExitFromTray()
+    {
+        RequestApplicationExit();
+    }
+
+    private void RequestApplicationExit(int exitCode = 0)
+    {
+        shutdownRequested = true;
+        trayLifecycle?.ExitFromTray();
+        Shutdown(exitCode);
+    }
+
+    private void DisposeTrayIcon()
+    {
+        if (trayIcon is not null)
+        {
+            trayIcon.Visible = false;
+            trayIcon.Dispose();
+            trayIcon = null;
+        }
+
+        trayMenu?.Dispose();
+        trayMenu = null;
     }
 
     private void StartWebServer()
@@ -138,7 +243,7 @@ public partial class App : Application
             "Erro inesperado",
             MessageBoxButton.OK,
             MessageBoxImage.Error);
-        Shutdown(1);
+        RequestApplicationExit(1);
     }
 
     private static void HandleUnhandledException(object sender, UnhandledExceptionEventArgs e)
