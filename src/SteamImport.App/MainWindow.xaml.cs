@@ -1,9 +1,11 @@
+using System.ComponentModel;
 using System.IO;
 using System.Diagnostics.CodeAnalysis;
 using System.Windows;
 using Microsoft.Win32;
 using SteamImport.Core;
 using SteamImport.Infrastructure;
+using MessageBox = System.Windows.MessageBox;
 
 namespace SteamImport.App;
 
@@ -15,6 +17,15 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Loaded += MainWindowLoaded;
+        Closing += MainWindowClosing;
+    }
+
+    private void MainWindowClosing(object? sender, CancelEventArgs e)
+    {
+        if (App.Current is App app && app.HandleMainWindowClosing())
+        {
+            e.Cancel = true;
+        }
     }
 
     private void MainWindowLoaded(object sender, RoutedEventArgs e)
