@@ -3,9 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Steam Import"
         Width="820"
-        Height="690"
+        Height="840"
         MinWidth="720"
-        MinHeight="620"
+        MinHeight="680"
         WindowStartupLocation="CenterScreen">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <Grid Margin="28">
@@ -15,16 +15,66 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <StackPanel Grid.Row="0" Margin="0,0,0,20">
-                <TextBlock FontSize="28" FontWeight="SemiBold" Text="Importar jogo para a Steam" />
+                <TextBlock FontFamily="Consolas" FontSize="28" FontWeight="Bold" Text="STEAM_IMPORT // PC-CONSOLE" />
                 <TextBlock Margin="0,6,0,0"
                            Foreground="#666666"
-                           Text="Selecione, revise e confirme. Nenhuma alteração é feita antes da confirmação." />
+                           Text="Configure este PC uma vez e acompanhe o estado por outro dispositivo da rede." />
             </StackPanel>
 
-            <GroupBox Grid.Row="1" Header="1. Instalação e conta Steam" Margin="0,0,0,14" Padding="14">
+            <GroupBox Grid.Row="1" Header="CONFIGURAÇÃO LOCAL" Margin="0,0,0,14" Padding="14">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" VerticalAlignment="Center" Text="Raiz dos jogos" />
+                    <TextBox x:Name="GamesRootTextBox" Grid.Row="0" Grid.Column="1" Margin="0,0,8,8" IsReadOnly="True" />
+                    <Button Grid.Row="0" Grid.Column="2" Margin="0,0,0,8" Click="BrowseGamesRootClick" Content="Selecionar…" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" VerticalAlignment="Center" Text="Chave SteamGridDB" />
+                    <PasswordBox x:Name="SteamGridDbApiKeyPasswordBox"
+                                 Grid.Row="1"
+                                 Grid.Column="1"
+                                 Grid.ColumnSpan="2"
+                                 Margin="0,0,0,8"
+                                 Padding="7" />
+
+                    <TextBlock x:Name="ConfigurationStatusTextBlock"
+                               Grid.Row="2"
+                               Grid.Column="0"
+                               Grid.ColumnSpan="2"
+                               Margin="0,4,16,8"
+                               TextWrapping="Wrap" />
+                    <Button Grid.Row="2"
+                            Grid.Column="2"
+                            Margin="0,0,0,8"
+                            Click="SaveConfigurationClick"
+                            Content="Salvar configuração"
+                            FontWeight="SemiBold" />
+
+                    <TextBlock x:Name="NetworkAddressesTextBlock"
+                               Grid.Row="3"
+                               Grid.Column="0"
+                               Grid.ColumnSpan="3"
+                               FontFamily="Consolas"
+                               Foreground="#276749"
+                               TextWrapping="Wrap" />
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Grid.Row="2" Header="INSTALAÇÃO E CONTA STEAM" Margin="0,0,0,14" Padding="14">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="140" />
@@ -62,7 +112,7 @@
                 </Grid>
             </GroupBox>
 
-            <GroupBox Grid.Row="2" Header="2. Pasta do jogo" Margin="0,0,0,14" Padding="14">
+            <GroupBox Grid.Row="3" Header="IMPORTAÇÃO LOCAL // PASTA DO JOGO" Margin="0,0,0,14" Padding="14">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="140" />
@@ -75,7 +125,7 @@
                 </Grid>
             </GroupBox>
 
-            <GroupBox Grid.Row="3" Header="3. Revisão obrigatória" Padding="14">
+            <GroupBox Grid.Row="4" Header="IMPORTAÇÃO LOCAL // REVISÃO OBRIGATÓRIA" Padding="14">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="140" />
@@ -110,7 +160,7 @@
                 </Grid>
             </GroupBox>
 
-            <Grid Grid.Row="4" Margin="0,18,0,0">
+            <Grid Grid.Row="5" Margin="0,18,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />

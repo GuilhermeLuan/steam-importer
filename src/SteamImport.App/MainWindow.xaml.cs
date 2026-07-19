@@ -21,6 +21,13 @@ public partial class MainWindow : Window
     {
         try
         {
+            ShowNetworkAddresses();
+            if (TryApplySavedConfiguration())
+            {
+                WindowState = WindowState.Minimized;
+                return;
+            }
+
             var detected = WindowsSteamInstallationLocator.Find();
             if (detected is null)
             {
@@ -36,6 +43,103 @@ public partial class MainWindow : Window
         {
             HandleUnexpectedFailure("steam.detection-failed", exception);
         }
+    }
+
+    private bool TryApplySavedConfiguration()
+    {
+        try
+        {
+            var configuration = App.ConfigurationStore.Load();
+            if (configuration is null)
+            {
+                ConfigurationStatusTextBlock.Text = "Configuração pendente. Preencha os campos e confirme a conta Steam.";
+                return false;
+            }
+
+            GamesRootTextBox.Text = configuration.GamesRootPath;
+            SteamGridDbApiKeyPasswordBox.Password = configuration.SteamGridDbApiKey;
+            var savedInstallation = SteamInstallation.Open(configuration.SteamRootPath);
+            ApplyInstallation(savedInstallation);
+            AccountComboBox.SelectedItem = savedInstallation.Accounts.Single(account =>
+                string.Equals(account.Id, configuration.SteamAccountId, StringComparison.Ordinal));
+            ConfigurationStatusTextBlock.Text = "Configuração pronta. O servidor remoto está disponível.";
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is InvalidLocalConfigurationException or
+            InvalidDataException or
+            IOException or
+            UnauthorizedAccessException or
+            FormatException)
+        {
+            App.Log.LogWarning("configuration.load-failed", "result=reconfiguration-required");
+            ConfigurationStatusTextBlock.Text = "A configuração salva não é mais válida. Revise os campos abaixo.";
+            return false;
+        }
+    }
+
+    private void BrowseGamesRootClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Selecione a pasta raiz que contém seus jogos",
+            Multiselect = false,
+        };
+        if (dialog.ShowDialog(this) == true)
+        {
+            GamesRootTextBox.Text = dialog.FolderName;
+        }
+    }
+
+    private void SaveConfigurationClick(object sender, RoutedEventArgs e)
+    {
+        if (installation is null || AccountComboBox.SelectedItem is not SteamAccount account)
+        {
+            ConfigurationStatusTextBlock.Text = "Carregue uma instalação Steam e selecione uma conta local.";
+            return;
+        }
+
+        try
+        {
+            App.ConfigurationStore.Save(new LocalConfiguration(
+                GamesRootTextBox.Text,
+                SteamGridDbApiKeyPasswordBox.Password,
+                installation.RootPath,
+                account.Id));
+            if (Environment.ProcessPath is { } executablePath)
+            {
+                WindowsStartupRegistration.EnsureRegistered(executablePath);
+            }
+
+            App.Log.LogInformation("configuration.saved", $"account={account.Id} result=ready");
+            ConfigurationStatusTextBlock.Text = "Configuração salva e validada. A chave está protegida para este usuário do Windows.";
+            ShowNetworkAddresses();
+        }
+        catch (InvalidLocalConfigurationException exception)
+        {
+            App.Log.LogWarning("configuration.rejected", "result=validation-failed");
+            ConfigurationStatusTextBlock.Text = exception.Message;
+            MessageBox.Show(
+                this,
+                exception.Message,
+                "Configuração inválida",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            App.Log.LogError("configuration.save-failed", "result=reported", exception);
+            ConfigurationStatusTextBlock.Text = "Não foi possível salvar a configuração local.";
+            MessageBox.Show(this, exception.Message, "Falha ao salvar", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ShowNetworkAddresses()
+    {
+        var addresses = LocalNetworkAddresses.GetHttpAddresses(SteamImport.Web.SteamImportServer.Port);
+        NetworkAddressesTextBlock.Text = addresses.Count == 0
+            ? $"REMOTE_URL // http://<IP-DESTE-PC>:{SteamImport.Web.SteamImportServer.Port}"
+            : $"REMOTE_URL // {string.Join("  |  ", addresses)}";
     }
 
     private void LoadSteamClick(object sender, RoutedEventArgs e)

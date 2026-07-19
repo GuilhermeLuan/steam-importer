@@ -1,17 +1,23 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using Microsoft.AspNetCore.Builder;
 using SteamImport.Infrastructure;
+using SteamImport.Web;
 
 namespace SteamImport.App;
 
 public partial class App : Application
 {
     private static readonly IAppLog ApplicationLog = CreateLog();
+    private static readonly LocalConfigurationStore LocalConfigurationStore = CreateConfigurationStore();
+    private WebApplication? webApplication;
 
     internal static IAppLog Log => ApplicationLog;
 
     internal static string? LogFilePath => (ApplicationLog as FileAppLog)?.FilePath;
+
+    internal static LocalConfigurationStore ConfigurationStore => LocalConfigurationStore;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -22,12 +28,36 @@ public partial class App : Application
             "app.started",
             $"version={typeof(App).Assembly.GetName().Version} os={Environment.OSVersion.VersionString.Replace(' ', '-')}");
         base.OnStartup(e);
+        StartWebServer();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        if (webApplication is not null)
+        {
+            webApplication.StopAsync().GetAwaiter().GetResult();
+            webApplication.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+
         Log.LogInformation("app.exited", $"exitCode={e.ApplicationExitCode}");
         base.OnExit(e);
+    }
+
+    private void StartWebServer()
+    {
+        try
+        {
+            webApplication = SteamImportServer.Build(
+                new LocalConfigurationStatusSource(ConfigurationStore));
+            webApplication.Urls.Add($"http://0.0.0.0:{SteamImportServer.Port}");
+            webApplication.StartAsync().GetAwaiter().GetResult();
+            Log.LogInformation("web.started", $"port={SteamImportServer.Port}");
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException)
+        {
+            Log.LogError("web.start-failed", $"port={SteamImportServer.Port}", exception);
+            webApplication = null;
+        }
     }
 
     private static IAppLog CreateLog()
@@ -44,6 +74,14 @@ public partial class App : Application
             return NullAppLog.Instance;
         }
     }
+
+    private static LocalConfigurationStore CreateConfigurationStore() =>
+        new(
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SteamImport",
+                "config.json"),
+            new WindowsUserSecretProtector());
 
     private void HandleDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {

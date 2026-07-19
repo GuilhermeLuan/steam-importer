@@ -12,6 +12,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SteamImport.Infrastructure.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SteamImport.App", "src\SteamImport.App\SteamImport.App.csproj", "{6A243457-0B56-47E1-A74A-4E0A7133D4A8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SteamImport.Web", "src\SteamImport.Web\SteamImport.Web.csproj", "{55E64EFE-CCFB-4645-A5CC-114F4613F9D7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SteamImport.Web.Tests", "tests\SteamImport.Web.Tests\SteamImport.Web.Tests.csproj", "{14AA3A80-CA93-4263-AEDE-078BD3DF34E9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -38,5 +42,13 @@ Global
 		{6A243457-0B56-47E1-A74A-4E0A7133D4A8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6A243457-0B56-47E1-A74A-4E0A7133D4A8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6A243457-0B56-47E1-A74A-4E0A7133D4A8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{55E64EFE-CCFB-4645-A5CC-114F4613F9D7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{55E64EFE-CCFB-4645-A5CC-114F4613F9D7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{55E64EFE-CCFB-4645-A5CC-114F4613F9D7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{55E64EFE-CCFB-4645-A5CC-114F4613F9D7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{14AA3A80-CA93-4263-AEDE-078BD3DF34E9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14AA3A80-CA93-4263-AEDE-078BD3DF34E9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14AA3A80-CA93-4263-AEDE-078BD3DF34E9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14AA3A80-CA93-4263-AEDE-078BD3DF34E9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

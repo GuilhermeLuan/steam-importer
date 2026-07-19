@@ -11,7 +11,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../SteamImport.Core/SteamImport.Core.csproj" />
     <ProjectReference Include="../SteamImport.Infrastructure/SteamImport.Infrastructure.csproj" />
+    <ProjectReference Include="../SteamImport.Web/SteamImport.Web.csproj" />
   </ItemGroup>
 </Project>
