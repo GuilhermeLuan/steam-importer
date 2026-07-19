@@ -284,6 +284,150 @@ public sealed class GameEndpointsTests
         Assert.DoesNotContain(games.Path, problem, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task MatchesEndpointSearchesTheReviewedProvisionalNameAndReturnsEveryOption()
+    {
+        using var games = TemporaryGamesRoot.Create();
+        games.AddGame("Neon Horizon");
+        games.AddFile("Neon Horizon", "NeonHorizon.exe");
+        var steamGridDb = new FakeSteamGridDbClient
+        {
+            Matches =
+            [
+                new SteamGridDbGameMatch(42, "Neon Horizon", new Uri("https://cdn.example/neon.png")),
+                new SteamGridDbGameMatch(84, "Neon Horizon Remastered", null),
+            ],
+        };
+
+        await using var application = SteamImportServer.Build(
+            new FixedStatusSource(new SteamImportStatus(true, true, true)),
+            new FixedGamesRootSource(games.Path),
+            new SystemGameFolderScanner(),
+            steamGridDb);
+        application.Urls.Add("http://127.0.0.1:0");
+        await application.StartAsync(CancellationToken.None);
+        var server = application.Services.GetRequiredService<IServer>();
+        var address = Assert.Single(server.Features.Get<IServerAddressesFeature>()!.Addresses);
+        using var client = new HttpClient { BaseAddress = new Uri(address) };
+        var candidate = Assert.Single(await ReadCandidates(client, HttpMethod.Get, "/api/games"));
+
+        using var response = await client.GetAsync(
+            $"/api/games/{candidate.Id}/matches",
+            CancellationToken.None);
+        var json = await response.Content.ReadAsStringAsync(CancellationToken.None);
+        response.EnsureSuccessStatusCode();
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal("Neon Horizon", steamGridDb.SearchTerm);
+        var matches = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal([42L, 84L], matches.Select(match => match.GetProperty("gameId").GetInt64()));
+        Assert.Equal(
+            ["Neon Horizon", "Neon Horizon Remastered"],
+            matches.Select(match => match.GetProperty("officialName").GetString()));
+        Assert.DoesNotContain("selected", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ExplicitlySelectedMatchReturnsOfficialNameAndAvailableArtworkIndependently()
+    {
+        using var games = TemporaryGamesRoot.Create();
+        games.AddGame("Neon Horizon");
+        games.AddFile("Neon Horizon", "NeonHorizon.exe");
+        var steamGridDb = new FakeSteamGridDbClient
+        {
+            Matches = [new SteamGridDbGameMatch(42, "Neon Horizon", null)],
+            Artwork = new SteamGridDbGameArtwork(
+                42,
+                "Neon Horizon Official",
+                ArtworkAsset(10, 20, "vertical"),
+                null,
+                ArtworkAsset(11, 18, "hero"),
+                null,
+                null),
+        };
+
+        await using var application = SteamImportServer.Build(
+            new FixedStatusSource(new SteamImportStatus(true, true, true)),
+            new FixedGamesRootSource(games.Path),
+            new SystemGameFolderScanner(),
+            steamGridDb);
+        application.Urls.Add("http://127.0.0.1:0");
+        await application.StartAsync(CancellationToken.None);
+        var server = application.Services.GetRequiredService<IServer>();
+        var address = Assert.Single(server.Features.Get<IServerAddressesFeature>()!.Addresses);
+        using var client = new HttpClient { BaseAddress = new Uri(address) };
+        var candidate = Assert.Single(await ReadCandidates(client, HttpMethod.Get, "/api/games"));
+        using var matchesResponse = await client.GetAsync(
+            $"/api/games/{candidate.Id}/matches",
+            CancellationToken.None);
+        matchesResponse.EnsureSuccessStatusCode();
+
+        using var response = await client.GetAsync(
+            $"/api/games/{candidate.Id}/matches/42/artwork",
+            CancellationToken.None);
+        var json = await response.Content.ReadAsStringAsync(CancellationToken.None);
+        response.EnsureSuccessStatusCode();
+        using var document = JsonDocument.Parse(json);
+        var artwork = document.RootElement;
+
+        Assert.Equal(42, steamGridDb.SelectedGameId);
+        Assert.Equal("Neon Horizon Official", artwork.GetProperty("officialName").GetString());
+        Assert.Equal(
+            "https://cdn.example/vertical-thumb.png",
+            artwork.GetProperty("verticalGrid").GetProperty("previewUrl").GetString());
+        Assert.Equal(
+            "https://cdn.example/hero-thumb.png",
+            artwork.GetProperty("hero").GetProperty("previewUrl").GetString());
+        Assert.Equal(JsonValueKind.Null, artwork.GetProperty("horizontalGrid").ValueKind);
+        Assert.Equal(JsonValueKind.Null, artwork.GetProperty("logo").ValueKind);
+        Assert.Equal(JsonValueKind.Null, artwork.GetProperty("icon").ValueKind);
+    }
+
+    [Fact]
+    public async Task ArtworkEndpointRejectsAGameThatWasNotOfferedForTheCandidate()
+    {
+        using var games = TemporaryGamesRoot.Create();
+        games.AddGame("Neon Horizon");
+        games.AddFile("Neon Horizon", "NeonHorizon.exe");
+        var steamGridDb = new FakeSteamGridDbClient
+        {
+            Matches = [new SteamGridDbGameMatch(42, "Neon Horizon", null)],
+        };
+
+        await using var application = SteamImportServer.Build(
+            new FixedStatusSource(new SteamImportStatus(true, true, true)),
+            new FixedGamesRootSource(games.Path),
+            new SystemGameFolderScanner(),
+            steamGridDb);
+        application.Urls.Add("http://127.0.0.1:0");
+        await application.StartAsync(CancellationToken.None);
+        var server = application.Services.GetRequiredService<IServer>();
+        var address = Assert.Single(server.Features.Get<IServerAddressesFeature>()!.Addresses);
+        using var client = new HttpClient { BaseAddress = new Uri(address) };
+        var candidate = Assert.Single(await ReadCandidates(client, HttpMethod.Get, "/api/games"));
+        using var matchesResponse = await client.GetAsync(
+            $"/api/games/{candidate.Id}/matches",
+            CancellationToken.None);
+        matchesResponse.EnsureSuccessStatusCode();
+
+        using var response = await client.GetAsync(
+            $"/api/games/{candidate.Id}/matches/84/artwork",
+            CancellationToken.None);
+        var problem = await response.Content.ReadAsStringAsync(CancellationToken.None);
+
+        Assert.Equal(System.Net.HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("escolha", problem, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(steamGridDb.SelectedGameId);
+    }
+
+    private static SteamGridDbArtworkAsset ArtworkAsset(long id, int score, string name) =>
+        new(
+            id,
+            score,
+            new Uri($"https://cdn.example/{name}.png"),
+            new Uri($"https://cdn.example/{name}-thumb.png"));
+
     private static string ReadName(JsonElement candidate) =>
         candidate.GetProperty("provisionalName").GetString()!;
 
@@ -314,6 +458,33 @@ public sealed class GameEndpointsTests
     private sealed class FixedGamesRootSource(string path) : IGamesRootSource
     {
         public string? GetGamesRootPath() => path;
+    }
+
+    private sealed class FakeSteamGridDbClient : ISteamGridDbClient
+    {
+        public IReadOnlyList<SteamGridDbGameMatch> Matches { get; init; } = [];
+
+        public SteamGridDbGameArtwork? Artwork { get; init; }
+
+        public string? SearchTerm { get; private set; }
+
+        public long? SelectedGameId { get; private set; }
+
+        public Task<IReadOnlyList<SteamGridDbGameMatch>> SearchGamesAsync(
+            string provisionalName,
+            CancellationToken cancellationToken)
+        {
+            SearchTerm = provisionalName;
+            return Task.FromResult(Matches);
+        }
+
+        public Task<SteamGridDbGameArtwork> GetRecommendedArtworkAsync(
+            long gameId,
+            CancellationToken cancellationToken)
+        {
+            SelectedGameId = gameId;
+            return Task.FromResult(Artwork ?? throw new NotSupportedException());
+        }
     }
 
     private sealed class InaccessibleReviewScanner : IGameFolderScanner

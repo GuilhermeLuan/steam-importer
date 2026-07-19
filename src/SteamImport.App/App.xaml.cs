@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.AspNetCore.Builder;
@@ -11,6 +12,7 @@ public partial class App : Application
 {
     private static readonly IAppLog ApplicationLog = CreateLog();
     private static readonly LocalConfigurationStore LocalConfigurationStore = CreateConfigurationStore();
+    private static readonly HttpClient SteamGridDbHttpClient = CreateSteamGridDbHttpClient();
     private WebApplication? webApplication;
 
     internal static IAppLog Log => ApplicationLog;
@@ -49,7 +51,11 @@ public partial class App : Application
         {
             webApplication = SteamImportServer.Build(
                 new LocalConfigurationStatusSource(ConfigurationStore),
-                new LocalConfigurationGamesRootSource(ConfigurationStore));
+                new LocalConfigurationGamesRootSource(ConfigurationStore),
+                new SystemGameFolderScanner(),
+                new SteamGridDbClient(
+                    SteamGridDbHttpClient,
+                    new LocalConfigurationSteamGridDbApiKeySource(ConfigurationStore)));
             webApplication.Urls.Add($"http://0.0.0.0:{SteamImportServer.Port}");
             webApplication.StartAsync().GetAwaiter().GetResult();
             Log.LogInformation("web.started", $"port={SteamImportServer.Port}");
@@ -83,6 +89,12 @@ public partial class App : Application
                 "SteamImport",
                 "config.json"),
             new WindowsUserSecretProtector());
+
+    private static HttpClient CreateSteamGridDbHttpClient() => new()
+    {
+        BaseAddress = new Uri("https://www.steamgriddb.com/api/v2/"),
+        Timeout = TimeSpan.FromSeconds(15),
+    };
 
     private void HandleDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
