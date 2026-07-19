@@ -12,7 +12,7 @@ internal static class StatusPage
           <link rel="stylesheet" href="/app.css">
           <script src="/app.js" defer></script>
         </head>
-        <body data-endpoint="/api/status">
+        <body data-endpoint="/api/status" data-games-endpoint="/api/games" data-refresh-endpoint="/api/games/refresh">
           <main>
             <header>
               <span class="prompt" aria-hidden="true">&gt;_</span>
@@ -49,6 +49,36 @@ internal static class StatusPage
                 <span id="summary-mark">[···]</span>
                 <p id="summary-text">SINCRONIZANDO COM O PC-CONSOLE</p>
               </div>
+            </section>
+
+            <section class="games terminal" aria-labelledby="games-title">
+              <div class="terminal-bar">
+                <h2 id="games-title">JOGOS_CANDIDATOS</h2>
+                <button id="discover-refresh" type="button">[ ATUALIZAR DESCOBERTA ]</button>
+              </div>
+              <p id="games-message" class="panel-message" aria-live="polite">LENDO PASTA RAIZ...</p>
+              <div id="game-list" class="game-list"></div>
+            </section>
+
+            <section id="game-review" class="review terminal" aria-labelledby="review-title" hidden>
+              <div class="terminal-bar">
+                <h2 id="review-title">REVISÃO_LOCAL</h2>
+                <span>SEM ALTERAR A STEAM</span>
+              </div>
+              <form id="review-form">
+                <label class="field">
+                  <span>Nome do jogo</span>
+                  <input id="review-name" name="displayName" autocomplete="off">
+                </label>
+                <fieldset>
+                  <legend>Executável principal</legend>
+                  <div id="executable-list" class="executable-list"></div>
+                </fieldset>
+                <p id="recommendation" class="recommendation"></p>
+                <div class="review-actions">
+                  <button id="cancel-review" type="button">[ CANCELAR ]</button>
+                </div>
+              </form>
             </section>
 
             <footer>
@@ -118,6 +148,42 @@ internal static class StatusPage
         .summary p { margin: 0; font-size: .8rem; letter-spacing: .06em; }
         #summary-mark { color: var(--amber); }
         .summary.ready #summary-mark, .summary.ready p { color: var(--green); }
+        .games, .review { margin-top: 28px; }
+        .games .terminal-bar button { width: auto; margin: -8px 0; }
+        .panel-message { margin: 0; padding: 20px 22px; color: var(--muted); }
+        .panel-message.error { color: var(--red); }
+        .game-list { display: grid; grid-template-columns: repeat(2, 1fr); }
+        .candidate {
+          margin: 0;
+          padding: 20px 22px;
+          border: 0;
+          border-top: 1px solid var(--line);
+          border-right: 1px solid var(--line);
+          color: var(--ink);
+          text-align: left;
+        }
+        .candidate:nth-child(even) { border-right: 0; }
+        .candidate::before { content: "> "; color: var(--green); }
+        #review-form { padding: 22px; }
+        .field { display: grid; gap: 9px; color: var(--muted); font-size: .72rem; letter-spacing: .08em; }
+        input {
+          width: 100%;
+          border: 1px solid var(--line);
+          background: #050806;
+          color: var(--ink);
+          padding: 12px;
+          font: inherit;
+        }
+        input:focus-visible { outline: 1px dashed var(--green); outline-offset: 3px; }
+        fieldset { margin: 24px 0 0; padding: 0; border: 0; }
+        legend { margin-bottom: 10px; color: var(--muted); font-size: .72rem; letter-spacing: .08em; }
+        .executable-list { display: grid; gap: 8px; }
+        .executable-option { display: flex; gap: 10px; align-items: center; padding: 12px; border: 1px solid var(--line); }
+        .executable-option:has(input:checked) { border-color: var(--green); color: var(--green); }
+        .executable-option input { width: auto; accent-color: var(--green); }
+        .recommendation { color: var(--green); font-size: .72rem; }
+        .review-actions { display: flex; justify-content: flex-end; border-top: 1px solid var(--line); margin-top: 22px; padding-top: 14px; }
+        .review-actions button { margin: 0; }
         footer { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 24px; color: var(--muted); font-size: .67rem; }
         button { margin-left: auto; border: 0; background: transparent; color: var(--green); font: inherit; cursor: pointer; padding: 8px 0; }
         button:hover, button:focus-visible { color: var(--ink); outline: 1px dashed var(--green); outline-offset: 5px; }
@@ -126,6 +192,8 @@ internal static class StatusPage
           header { grid-template-columns: auto 1fr; }
           .link-state { grid-column: 1 / -1; justify-self: start; }
           .status-grid { grid-template-columns: 1fr; }
+          .game-list { grid-template-columns: 1fr; }
+          .candidate { border-right: 0; }
           article { min-height: 120px; border-right: 0; border-bottom: 1px solid var(--line); }
           article:last-child { border-bottom: 0; }
           h3 { margin-top: 20px; }
@@ -143,6 +211,14 @@ internal static class StatusPage
         const summaryMark = document.querySelector('#summary-mark');
         const summaryText = document.querySelector('#summary-text');
         const endpoint = document.body.dataset.endpoint;
+        const gamesEndpoint = document.body.dataset.gamesEndpoint;
+        const refreshEndpoint = document.body.dataset.refreshEndpoint;
+        const gameList = document.querySelector('#game-list');
+        const gamesMessage = document.querySelector('#games-message');
+        const reviewPanel = document.querySelector('#game-review');
+        const reviewName = document.querySelector('#review-name');
+        const executableList = document.querySelector('#executable-list');
+        const recommendation = document.querySelector('#recommendation');
 
         function render(status) {
           cards.forEach((card) => {
@@ -173,13 +249,105 @@ internal static class StatusPage
           }
         }
 
+        function closeReview() {
+          reviewPanel.hidden = true;
+          document.querySelector('#review-form').reset();
+          executableList.replaceChildren();
+          recommendation.textContent = '';
+        }
+
+        function cancelReview() {
+          closeReview();
+          gamesMessage.classList.remove('error');
+          gamesMessage.textContent = 'REVISÃO CANCELADA // NENHUMA ALTERAÇÃO NA STEAM';
+        }
+
+        async function readProblem(response) {
+          try {
+            const problem = await response.json();
+            return problem.detail || problem.title || `HTTP ${response.status}`;
+          } catch {
+            return `HTTP ${response.status}`;
+          }
+        }
+
+        async function openReview(candidateId) {
+          gamesMessage.classList.remove('error');
+          gamesMessage.textContent = 'ANALISANDO EXECUTÁVEIS...';
+          try {
+            const response = await fetch(`${gamesEndpoint}/${candidateId}`, { cache: 'no-store' });
+            if (!response.ok) throw new Error(await readProblem(response));
+            const review = await response.json();
+            reviewName.value = review.provisionalName;
+            executableList.replaceChildren(...review.executables.map((executable) => {
+              const label = document.createElement('label');
+              label.className = 'executable-option';
+              const input = document.createElement('input');
+              input.type = 'radio';
+              input.name = 'executableId';
+              input.value = executable.executableId;
+              input.checked = executable.executableId === review.recommendedExecutableId;
+              label.append(input, document.createTextNode(executable.relativePath));
+              return label;
+            }));
+            const recommended = review.executables.find(
+              executable => executable.executableId === review.recommendedExecutableId);
+            recommendation.textContent = recommended
+              ? `RECOMENDADO // ${recommended.relativePath}`
+              : '';
+            reviewPanel.hidden = false;
+            gamesMessage.textContent = 'REVISE O NOME E O EXECUTÁVEL OU CANCELE.';
+            reviewName.focus();
+          } catch (error) {
+            closeReview();
+            gamesMessage.classList.add('error');
+            gamesMessage.textContent = error.message;
+          }
+        }
+
+        function renderCandidates(candidates) {
+          gameList.replaceChildren(...candidates.map((candidate) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'candidate';
+            button.textContent = candidate.provisionalName;
+            button.addEventListener('click', () => openReview(candidate.candidateId));
+            return button;
+          }));
+          gamesMessage.classList.remove('error');
+          gamesMessage.textContent = candidates.length === 0
+            ? 'NENHUMA SUBPASTA ENCONTRADA.'
+            : `${candidates.length} CANDIDATO(S) ENCONTRADO(S).`;
+        }
+
+        async function loadGames(forceRefresh = false) {
+          closeReview();
+          gamesMessage.classList.remove('error');
+          gamesMessage.textContent = forceRefresh ? 'ATUALIZANDO DESCOBERTA...' : 'LENDO PASTA RAIZ...';
+          try {
+            const response = await fetch(forceRefresh ? refreshEndpoint : gamesEndpoint, {
+              method: forceRefresh ? 'POST' : 'GET',
+              cache: 'no-store',
+            });
+            if (!response.ok) throw new Error(await readProblem(response));
+            renderCandidates(await response.json());
+          } catch (error) {
+            gameList.replaceChildren();
+            gamesMessage.classList.add('error');
+            gamesMessage.textContent = error.message;
+          }
+        }
+
         function tick() {
           document.querySelector('#clock').textContent = new Date().toLocaleTimeString('pt-BR');
         }
 
         document.querySelector('#refresh').addEventListener('click', refresh);
+        document.querySelector('#discover-refresh').addEventListener('click', () => loadGames(true));
+        document.querySelector('#cancel-review').addEventListener('click', cancelReview);
         tick();
         refresh();
+        loadGames();
         setInterval(tick, 1000);
         setInterval(refresh, 5000);
         """;

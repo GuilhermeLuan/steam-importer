@@ -8,6 +8,7 @@ public static class ManualImportPlanner
         "uninstall",
         "setup",
         "installer",
+        "config",
         "crashreporter",
         "crashhandler",
         "vcredist",
@@ -25,8 +26,24 @@ public static class ManualImportPlanner
         }
 
         var displayName = new DirectoryInfo(fullPath).Name;
-        var candidates = Directory
-            .EnumerateFiles(fullPath, "*.exe", SearchOption.AllDirectories)
+        var enumerationOptions = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = false,
+            AttributesToSkip = FileAttributes.ReparsePoint,
+        };
+        return CreateReview(
+            displayName,
+            Directory.EnumerateFiles(fullPath, "*.exe", enumerationOptions));
+    }
+
+    public static ManualImportReview CreateReview(
+        string displayName,
+        IEnumerable<string> executablePaths)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+        ArgumentNullException.ThrowIfNull(executablePaths);
+        var candidates = executablePaths
             .Where(IsGameExecutable)
             .OrderByDescending(path => SimilarityScore(displayName, path))
             .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
@@ -34,7 +51,7 @@ public static class ManualImportPlanner
 
         if (candidates.Length == 0)
         {
-            throw new InvalidOperationException("The selected game folder does not contain an executable candidate.");
+            throw new NoGameExecutableException();
         }
 
         return new ManualImportReview(displayName, candidates[0], candidates);
@@ -62,3 +79,8 @@ public sealed record ManualImportReview(
     string DisplayName,
     string RecommendedExecutable,
     IReadOnlyList<string> ExecutableCandidates);
+
+public sealed class NoGameExecutableException()
+    : InvalidOperationException("The selected game folder does not contain an executable candidate.")
+{
+}
