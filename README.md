@@ -15,18 +15,21 @@ com revisão obrigatória e preservação dos atalhos existentes.
 5. Na página remota, atualize a descoberta, selecione uma subpasta e revise o
    executável recomendado. Escolha explicitamente o título correto entre os
    resultados do SteamGridDB; o nome oficial e a melhor arte estática de cada
-   categoria disponível aparecem em uma prévia. Cancelar a revisão não altera
-   a Steam.
-6. Para a importação local existente, selecione a pasta do jogo, revise nome e
-   executável, feche completamente a Steam e confirme a operação.
+   categoria disponível aparecem em uma prévia.
+6. Confirme a importação pelo navegador. O aplicativo prepara as artes, bloqueia
+   a operação se houver um jogo em execução, encerra normalmente a Steam quando
+   necessário, preserva os atalhos existentes e reabre o cliente diretamente no
+   modo Big Picture se ele estava aberto. Cancelar a revisão não altera a Steam.
 
 A configuração fica em `%LOCALAPPDATA%\SteamImport\config.json`. A chave do
 SteamGridDB é protegida para o usuário atual do Windows, não é enviada ao
 navegador e não é registrada nos logs. Ao salvar, o aplicativo também registra
 sua inicialização automática para esse usuário.
 
-A importação é bloqueada enquanto `steam.exe` está em execução. Antes de alterar
-um `shortcuts.vdf` existente, o aplicativo mantém até cinco backups em
+A importação local antiga continua exigindo que a Steam esteja fechada. O fluxo
+remoto solicita o encerramento normal do cliente, aguarda com timeout e nunca
+força o término. Antes de alterar um `shortcuts.vdf` existente ou substituir uma
+arte, o aplicativo cria backups em
 `%LOCALAPPDATA%\SteamImport\Backups\<conta>`.
 
 ## Logs
@@ -75,7 +78,7 @@ associada à tag.
 
 ## Escopo atual
 
-O fluxo remoto atual identifica o jogo e pré-visualiza artes do SteamGridDB,
-mas ainda não importa pelo navegador. Monitoramento automático de pastas,
-bandeja do sistema, remoção de jogos e encerramento automático da Steam também
-continuam fora do escopo atual.
+O fluxo remoto atual identifica o jogo, pré-visualiza e instala artes do
+SteamGridDB, adiciona o atalho e recompõe o estado aberto/fechado da Steam.
+Monitoramento automático de pastas, bandeja do sistema, remoção de jogos e
+rollback transacional completo continuam fora do escopo atual.

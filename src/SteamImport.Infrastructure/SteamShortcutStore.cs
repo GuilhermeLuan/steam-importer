@@ -67,7 +67,14 @@ public static class SteamShortcutStore
             }
 
             _ = ReadDocument(temporaryPath);
-            File.Move(temporaryPath, fullPath, overwrite: true);
+            if (File.Exists(fullPath))
+            {
+                File.Replace(temporaryPath, fullPath, destinationBackupFileName: null);
+            }
+            else
+            {
+                File.Move(temporaryPath, fullPath);
+            }
         }
         finally
         {

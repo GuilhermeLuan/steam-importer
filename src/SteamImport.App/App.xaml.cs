@@ -55,7 +55,13 @@ public partial class App : Application
                 new SystemGameFolderScanner(),
                 new SteamGridDbClient(
                     SteamGridDbHttpClient,
-                    new LocalConfigurationSteamGridDbApiKeySource(ConfigurationStore)));
+                    new LocalConfigurationSteamGridDbApiKeySource(ConfigurationStore)),
+                new LocalConfigurationRemoteImportContextSource(ConfigurationStore),
+                new RemoteGameImporter(
+                    new WindowsSteamClientController(),
+                    new WindowsGameActivityProbe(),
+                    SteamGridDbHttpClient,
+                    Log));
             webApplication.Urls.Add($"http://0.0.0.0:{SteamImportServer.Port}");
             webApplication.StartAsync().GetAwaiter().GetResult();
             Log.LogInformation("web.started", $"port={SteamImportServer.Port}");

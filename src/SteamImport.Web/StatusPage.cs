@@ -12,7 +12,7 @@ internal static class StatusPage
           <link rel="stylesheet" href="/app.css">
           <script src="/app.js" defer></script>
         </head>
-        <body data-endpoint="/api/status" data-games-endpoint="/api/games" data-refresh-endpoint="/api/games/refresh">
+        <body data-endpoint="/api/status" data-games-endpoint="/api/games" data-refresh-endpoint="/api/games/refresh" data-import-endpoint="/api/import">
           <main>
             <header>
               <span class="prompt" aria-hidden="true">&gt;_</span>
@@ -86,6 +86,7 @@ internal static class StatusPage
                 </section>
                 <div class="review-actions">
                   <button id="cancel-review" type="button">[ CANCELAR ]</button>
+                  <button id="confirm-import" type="submit" disabled>[ IMPORTAR ]</button>
                 </div>
               </form>
             </section>
@@ -203,8 +204,9 @@ internal static class StatusPage
         .artwork-item img { display: block; width: 100%; max-height: 180px; object-fit: contain; background: #050806; }
         .artwork-item figcaption { margin-top: 8px; font-size: .68rem; letter-spacing: .06em; }
         .artwork-missing { display: grid; place-items: center; text-align: center; font-size: .68rem; }
-        .review-actions { display: flex; justify-content: flex-end; border-top: 1px solid var(--line); margin-top: 22px; padding-top: 14px; }
+        .review-actions { display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--line); margin-top: 22px; padding-top: 14px; }
         .review-actions button { margin: 0; }
+        button:disabled { cursor: not-allowed; opacity: .45; }
         footer { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 24px; color: var(--muted); font-size: .67rem; }
         button { margin-left: auto; border: 0; background: transparent; color: var(--green); font: inherit; cursor: pointer; padding: 8px 0; }
         button:hover, button:focus-visible { color: var(--ink); outline: 1px dashed var(--green); outline-offset: 5px; }
@@ -235,6 +237,7 @@ internal static class StatusPage
         const endpoint = document.body.dataset.endpoint;
         const gamesEndpoint = document.body.dataset.gamesEndpoint;
         const refreshEndpoint = document.body.dataset.refreshEndpoint;
+        const importEndpoint = document.body.dataset.importEndpoint;
         const gameList = document.querySelector('#game-list');
         const gamesMessage = document.querySelector('#games-message');
         const reviewPanel = document.querySelector('#game-review');
@@ -245,6 +248,10 @@ internal static class StatusPage
         const matchList = document.querySelector('#match-list');
         const artworkPreview = document.querySelector('#artwork-preview');
         const artworkList = document.querySelector('#artwork-list');
+        const reviewForm = document.querySelector('#review-form');
+        const importButton = document.querySelector('#confirm-import');
+        let activeCandidateId = null;
+        let selectedGameId = null;
 
         function render(status) {
           cards.forEach((card) => {
@@ -276,8 +283,11 @@ internal static class StatusPage
         }
 
         function closeReview() {
+          activeCandidateId = null;
+          selectedGameId = null;
+          importButton.disabled = true;
           reviewPanel.hidden = true;
-          document.querySelector('#review-form').reset();
+          reviewForm.reset();
           executableList.replaceChildren();
           recommendation.textContent = '';
           identificationMessage.textContent = '';
@@ -309,6 +319,7 @@ internal static class StatusPage
             const response = await fetch(`${gamesEndpoint}/${candidateId}`, { cache: 'no-store' });
             if (!response.ok) throw new Error(await readProblem(response));
             const review = await response.json();
+            activeCandidateId = candidateId;
             reviewName.value = review.provisionalName;
             executableList.replaceChildren(...review.executables.map((executable) => {
               const label = document.createElement('label');
@@ -338,6 +349,8 @@ internal static class StatusPage
         }
 
         async function loadMatches(candidateId) {
+          selectedGameId = null;
+          importButton.disabled = true;
           identificationMessage.classList.remove('error');
           identificationMessage.textContent = 'PESQUISANDO TÍTULOS...';
           matchList.replaceChildren();
@@ -373,6 +386,8 @@ internal static class StatusPage
         }
 
         async function loadArtwork(candidateId, gameId) {
+          selectedGameId = null;
+          importButton.disabled = true;
           identificationMessage.classList.remove('error');
           identificationMessage.textContent = 'CARREGANDO ARTES ESTÁTICAS...';
           artworkPreview.hidden = true;
@@ -410,10 +425,48 @@ internal static class StatusPage
               return figure;
             }));
             artworkPreview.hidden = false;
+            selectedGameId = gameId;
+            importButton.disabled = false;
             identificationMessage.textContent = 'TÍTULO CONFIRMADO // PRÉVIA SEM ALTERAR A STEAM.';
           } catch (error) {
             identificationMessage.classList.add('error');
             identificationMessage.textContent = error.message;
+          }
+        }
+
+        async function submitReview(event) {
+          event.preventDefault();
+          const selectedExecutable = reviewForm.querySelector('input[name="executableId"]:checked');
+          if (!activeCandidateId || !selectedGameId || !selectedExecutable) {
+            identificationMessage.classList.add('error');
+            identificationMessage.textContent = 'CONCLUA A REVISÃO ANTES DE IMPORTAR.';
+            return;
+          }
+
+          importButton.disabled = true;
+          identificationMessage.classList.remove('error');
+          identificationMessage.textContent = 'IMPORTANDO // AGUARDE A STEAM SER ATUALIZADA...';
+          try {
+            const response = await fetch(importEndpoint, {
+              method: 'POST',
+              cache: 'no-store',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                candidateId: activeCandidateId,
+                executableId: selectedExecutable.value,
+                gameId: selectedGameId,
+                displayName: reviewName.value,
+              }),
+            });
+            if (!response.ok) throw new Error(await readProblem(response));
+            const result = await response.json();
+            closeReview();
+            gamesMessage.classList.remove('error');
+            gamesMessage.textContent = `IMPORTADO // ${result.displayName.toLocaleUpperCase('pt-BR')}`;
+          } catch (error) {
+            identificationMessage.classList.add('error');
+            identificationMessage.textContent = error.message;
+            importButton.disabled = false;
           }
         }
 
@@ -457,6 +510,7 @@ internal static class StatusPage
         document.querySelector('#refresh').addEventListener('click', refresh);
         document.querySelector('#discover-refresh').addEventListener('click', () => loadGames(true));
         document.querySelector('#cancel-review').addEventListener('click', cancelReview);
+        reviewForm.addEventListener('submit', submitReview);
         tick();
         refresh();
         loadGames();

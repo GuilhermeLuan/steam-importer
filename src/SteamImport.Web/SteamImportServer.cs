@@ -94,19 +94,39 @@ public static class SteamImportServer
         IStatusSource statusSource,
         IGamesRootSource gamesRootSource,
         IGameFolderScanner gameFolderScanner,
-        ISteamGridDbClient steamGridDbClient)
+        ISteamGridDbClient steamGridDbClient) =>
+        Build(
+            statusSource,
+            gamesRootSource,
+            gameFolderScanner,
+            steamGridDbClient,
+            new MissingRemoteImportContextSource(),
+            new MissingRemoteGameImporter());
+
+    public static WebApplication Build(
+        IStatusSource statusSource,
+        IGamesRootSource gamesRootSource,
+        IGameFolderScanner gameFolderScanner,
+        ISteamGridDbClient steamGridDbClient,
+        IRemoteImportContextSource remoteImportContextSource,
+        IRemoteGameImporter remoteGameImporter)
     {
         ArgumentNullException.ThrowIfNull(statusSource);
         ArgumentNullException.ThrowIfNull(gamesRootSource);
         ArgumentNullException.ThrowIfNull(gameFolderScanner);
         ArgumentNullException.ThrowIfNull(steamGridDbClient);
+        ArgumentNullException.ThrowIfNull(remoteImportContextSource);
+        ArgumentNullException.ThrowIfNull(remoteGameImporter);
         var builder = WebApplication.CreateSlimBuilder();
         builder.Services.AddSingleton(statusSource);
         builder.Services.AddSingleton(gamesRootSource);
         builder.Services.AddSingleton(gameFolderScanner);
         builder.Services.AddSingleton(steamGridDbClient);
+        builder.Services.AddSingleton(remoteImportContextSource);
+        builder.Services.AddSingleton(remoteGameImporter);
         builder.Services.AddSingleton<GameCandidateCatalog>();
         builder.Services.AddSingleton<GameIdentificationCatalog>();
+        builder.Services.AddSingleton<RemoteImportWorkflow>();
 
         var application = builder.Build();
         application.Use(async (context, next) =>
@@ -214,8 +234,77 @@ public static class SteamImportServer
                     statusCode: StatusCodes.Status422UnprocessableEntity);
             }
         });
+        application.MapPost(
+            "/api/import",
+            async (RemoteImportCommand command, HttpContext context, RemoteImportWorkflow workflow, CancellationToken cancellationToken) =>
+            {
+                context.Response.Headers.CacheControl = "no-store";
+                try
+                {
+                    var result = await workflow.ImportAsync(command, cancellationToken);
+                    return Results.Ok(new RemoteImportResponse(
+                        result.Shortcut.AppId,
+                        result.Shortcut.DisplayName,
+                        result.SteamWasRunning,
+                        result.SteamRestarted));
+                }
+                catch (RemoteImportReviewNotReadyException exception)
+                {
+                    return ImportProblem(exception.Message, StatusCodes.Status409Conflict);
+                }
+                catch (ImportAlreadyInProgressException exception)
+                {
+                    return ImportProblem(exception.Message, StatusCodes.Status409Conflict);
+                }
+                catch (GameIsRunningException exception)
+                {
+                    return ImportProblem(exception.Message, StatusCodes.Status409Conflict);
+                }
+                catch (SteamIsRunningException exception)
+                {
+                    return ImportProblem(exception.Message, StatusCodes.Status409Conflict);
+                }
+                catch (InvalidRemoteImportRequestException exception)
+                {
+                    return ImportProblem(exception.Message, StatusCodes.Status422UnprocessableEntity);
+                }
+                catch (InvalidArtworkException exception)
+                {
+                    return ImportProblem(exception.Message, StatusCodes.Status503ServiceUnavailable);
+                }
+                catch (SteamShutdownTimedOutException exception)
+                {
+                    return ImportProblem(exception.Message, StatusCodes.Status504GatewayTimeout);
+                }
+                catch (TimeoutException exception)
+                {
+                    return ImportProblem(exception.Message, StatusCodes.Status504GatewayTimeout);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    return ImportProblem(
+                        "O Windows negou acesso à biblioteca da Steam. Revise as permissões e tente novamente.",
+                        StatusCodes.Status422UnprocessableEntity);
+                }
+                catch (IOException)
+                {
+                    return ImportProblem(
+                        "Não foi possível atualizar a biblioteca da Steam. O arquivo original foi preservado ou possui backup.",
+                        StatusCodes.Status500InternalServerError);
+                }
+                catch (InvalidOperationException exception)
+                {
+                    return ImportProblem(exception.Message, StatusCodes.Status409Conflict);
+                }
+            });
         return application;
     }
+
+    private static IResult ImportProblem(string detail, int statusCode) =>
+        Results.Problem(
+            title: "Não foi possível importar o jogo.",
+            detail: detail,
+            statusCode: statusCode);
 
     private static IResult ReadCandidateList(Func<IReadOnlyList<GameCandidateSummary>> read)
     {
@@ -259,4 +348,23 @@ public static class SteamImportServer
             SteamGridDbFailure.MissingConfiguration,
             "Configure a chave do SteamGridDB no PC-console e tente novamente.");
     }
+
+    private sealed class MissingRemoteImportContextSource : IRemoteImportContextSource
+    {
+        public RemoteImportContext? GetContext() => null;
+    }
+
+    private sealed class MissingRemoteGameImporter : IRemoteGameImporter
+    {
+        public Task<RemoteGameImportResult> ImportAsync(
+            RemoteGameImportRequest request,
+            CancellationToken cancellationToken) =>
+            Task.FromException<RemoteGameImportResult>(new RemoteImportReviewNotReadyException());
+    }
+
+    private sealed record RemoteImportResponse(
+        uint AppId,
+        string DisplayName,
+        bool SteamWasRunning,
+        bool SteamRestarted);
 }

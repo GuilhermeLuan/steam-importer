@@ -17,6 +17,11 @@ public sealed record GameCandidateReview(
     Guid RecommendedExecutableId,
     IReadOnlyList<GameExecutableOption> Executables);
 
+public sealed record ResolvedGameExecutable(
+    string GamesRootPath,
+    string CandidatePath,
+    string ExecutablePath);
+
 public interface IGamesRootSource
 {
     string? GetGamesRootPath();
@@ -52,6 +57,7 @@ public sealed class GameCandidateCatalog(
     IGameFolderScanner gameFolderScanner)
 {
     private readonly object sync = new();
+    private readonly Dictionary<Guid, ReviewedCandidateEntry> reviews = [];
     private CandidateEntry[]? snapshot;
 
     public IReadOnlyList<GameCandidateSummary> List()
@@ -68,6 +74,7 @@ public sealed class GameCandidateCatalog(
         lock (sync)
         {
             snapshot = Discover();
+            reviews.Clear();
             return Summarize(snapshot);
         }
     }
@@ -78,6 +85,11 @@ public sealed class GameCandidateCatalog(
         lock (sync)
         {
             snapshot ??= Discover();
+            if (reviews.TryGetValue(candidateId, out var existingReview))
+            {
+                return existingReview.Review;
+            }
+
             path = snapshot
                 .SingleOrDefault(candidate => candidate.CandidateId == candidateId)
                 ?.Path;
@@ -101,13 +113,48 @@ public sealed class GameCandidateCatalog(
             .ToArray();
         var recommended = executables.Single(executable =>
             string.Equals(executable.Path, planned.RecommendedExecutable, StringComparison.OrdinalIgnoreCase));
-        return new GameCandidateReview(
+        var review = new GameCandidateReview(
             candidateId,
             planned.DisplayName,
             recommended.ExecutableId,
             executables
                 .Select(executable => new GameExecutableOption(executable.ExecutableId, executable.RelativePath))
                 .ToArray());
+        lock (sync)
+        {
+            if (snapshot?.Any(candidate =>
+                    candidate.CandidateId == candidateId &&
+                    string.Equals(candidate.Path, path, StringComparison.Ordinal)) != true)
+            {
+                return null;
+            }
+
+            reviews[candidateId] = new ReviewedCandidateEntry(path, review, executables);
+        }
+
+        return review;
+    }
+
+    public ResolvedGameExecutable? ResolveExecutable(Guid candidateId, Guid executableId)
+    {
+        lock (sync)
+        {
+            if (!reviews.TryGetValue(candidateId, out var reviewed))
+            {
+                return null;
+            }
+
+            var executable = reviewed.Executables.SingleOrDefault(item => item.ExecutableId == executableId);
+            if (executable is null || !File.Exists(executable.Path))
+            {
+                return null;
+            }
+
+            return new ResolvedGameExecutable(
+                Path.GetDirectoryName(reviewed.CandidatePath)!,
+                reviewed.CandidatePath,
+                executable.Path);
+        }
     }
 
     private CandidateEntry[] Discover()
@@ -142,4 +189,9 @@ public sealed class GameCandidateCatalog(
         Guid ExecutableId,
         string Path,
         string RelativePath);
+
+    private sealed record ReviewedCandidateEntry(
+        string CandidatePath,
+        GameCandidateReview Review,
+        IReadOnlyList<GameExecutableEntry> Executables);
 }
