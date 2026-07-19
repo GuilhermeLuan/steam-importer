@@ -54,6 +54,25 @@ dotnet run --project src/SteamImport.App
 O workflow `Windows build` executa build e testes e publica um ZIP contendo um
 único `SteamImport.exe` self-contained para `win-x64`.
 
+## Releases
+
+Versões publicadas ficam na página de
+[Releases](https://github.com/GuilhermeLuan/steam-importer/releases), com o ZIP
+portátil para Windows x64 e `SHA256SUMS.txt`.
+
+Depois de integrar uma versão na `main`, mantenedores podem acionar a publicação
+automática criando uma tag semântica:
+
+```bash
+git switch main
+git pull --ff-only
+git tag -a v0.2.0 -m "Steam Import v0.2.0"
+git push origin v0.2.0
+```
+
+O workflow compila, executa todos os testes e só então cria a GitHub Release
+associada à tag.
+
 ## Escopo atual
 
 O fluxo remoto atual identifica o jogo e pré-visualiza artes do SteamGridDB,
